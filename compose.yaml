@@ -1,0 +1,44 @@
+name: bitaxe-fleet
+services:
+  api:
+    build: .
+    init: true
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3080:3080"
+    environment:
+      DATABASE_PATH: /data/dashboard.sqlite
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-30}
+      MINER_TIMEOUT_MS: ${MINER_TIMEOUT_MS:-5000}
+      APP_ORIGIN: ${APP_ORIGIN:-http://127.0.0.1:3080}
+    volumes:
+      - fleet-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3080/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  collector:
+    build: .
+    init: true
+    restart: unless-stopped
+    command: ["node", "dist/src/collector-cli.js"]
+    environment:
+      DATABASE_PATH: /data/dashboard.sqlite
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-30}
+      MINER_TIMEOUT_MS: ${MINER_TIMEOUT_MS:-5000}
+      RETENTION_DAYS: ${RETENTION_DAYS:-1}
+    volumes:
+      - fleet-data:/data
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  fleet-data:

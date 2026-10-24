@@ -1,0 +1,38 @@
+import {
+  sqliteTable,
+  text,
+  integer,
+  real,
+  primaryKey,
+} from "drizzle-orm/sqlite-core";
+export const miners = sqliteTable("miners", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  ip: text("ip").notNull().unique(),
+  algorithm: text("algorithm").notNull(),
+  macAddress: text("mac_address"),
+  hostname: text("hostname"),
+  model: text("model"),
+  registeredAt: integer("registered_at").notNull().default(0),
+});
+export const observations = sqliteTable(
+  "observations",
+  {
+    minerId: text("miner_id")
+      .notNull()
+      .references(() => miners.id),
+    observedAt: integer("observed_at").notNull(),
+    online: integer("online", { mode: "boolean" }).notNull(),
+    hashrateGhs: real("hashrate_ghs"),
+    powerWatts: real("power_watts"),
+    temperatureC: real("temperature_c"),
+    bestDifficulty: real("best_difficulty"),
+    accepted: integer("accepted"),
+    rejected: integer("rejected"),
+    uptimeSeconds: integer("uptime_seconds"),
+    firmware: text("firmware"),
+    pool: text("pool"),
+    error: text("error"),
+  },
+  (table) => [primaryKey({ columns: [table.minerId, table.observedAt] })],
+);

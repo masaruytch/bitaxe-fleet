@@ -1,0 +1,32 @@
+node_modules/
+dist/
+coverage/
+# Local settings, telemetry, and backups must never enter Git.
+data/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.bak
+*.backup
+*.log
+logs/
+cache/
+.DS_Store
+.idea/
+.vscode/
+
+# Credentials and private history backups.
+.npmrc
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+*.bundle
+backups/
+id_rsa
+id_ed25519
