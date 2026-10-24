@@ -1,0 +1,59 @@
+name: Bug report
+description: Report a problem with setup, readings, charts or the dashboard.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check existing issues first. Reports are public: redact real IP/MAC addresses, wallet addresses, pool credentials and personal details from logs and screenshots. Do not upload databases or environment files. For security vulnerabilities, follow [SECURITY.md](https://github.com/masaruytch/bitaxe-fleet/blob/main/SECURITY.md) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Bitaxe Fleet version
+      placeholder: "For example: v0.1.0, or a commit hash"
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - Docker Compose
+        - Node.js
+        - Demo / fleet setup wizard
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Host OS, browser/version, and Node.js or Docker version if known. For miner-related problems, include model, board revision and AxeOS version (or say unknown).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do before the problem appeared?
+      placeholder: "1. Open…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Include the error message, if any. For reading discrepancies, give units and approximate observation times.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitised logs or screenshots (optional)
+      description: Share only the relevant excerpt. Remove private identifiers before uploading.

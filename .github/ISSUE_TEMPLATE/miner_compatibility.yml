@@ -1,0 +1,66 @@
+name: Miner compatibility result
+description: Share a successful, partial or unsuccessful test with your miner.
+title: "[Compatibility]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Successful and unsuccessful tests are both useful. A community report is evidence for that device and firmware combination, not certification of every model. Do not include real IP/MAC addresses, wallet addresses, pool credentials, databases or private telemetry dumps.
+  - type: input
+    id: model
+    attributes:
+      label: Miner model and board revision
+      placeholder: "For example: Bitaxe Gamma 601; say unknown if the revision is unavailable"
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: AxeOS / firmware version
+      description: Include the firmware project name if it is a fork. Say unknown if unavailable.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Bitaxe Fleet version
+      placeholder: "For example: v0.1.0, or a commit hash"
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Test setup
+      description: Installation method (Docker, Node.js or wizard), host OS and approximate test duration. Do not include network addresses.
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall result
+      options:
+        - Works as expected in my test
+        - Partially works / missing or incorrect readings
+        - Cannot connect or register
+        - Other / unsure
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: What did you verify?
+      description: Select only checks you performed successfully. Leave untested or failing checks unticked and explain below.
+      options:
+        - label: Connection check and registration
+        - label: Repeated collection and connection status
+        - label: Hashrate and units compared with AxeOS
+        - label: Temperature and power compared with AxeOS
+        - label: Best difficulty compared with AxeOS
+        - label: History charts populate over time
+  - type: textarea
+    id: findings
+    attributes:
+      label: Findings
+      description: What worked, failed or remained untested? Describe missing readings or differences, including units. Sanitised screenshots are welcome.
+    validations:
+      required: true
