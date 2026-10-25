@@ -23,6 +23,12 @@ export function normalizeTelemetry(
   }
   const text = (key: string) =>
     typeof info[key] === "string" ? (info[key] as string).slice(0, 255) : null;
+  const fallback = info.isUsingFallbackStratum;
+  const knownPool =
+    fallback === true || fallback === false || fallback === 0 || fallback === 1;
+  const usingFallback = fallback === true || fallback === 1;
+  const prefix = usingFallback ? "fallbackStratum" : "stratum";
+  const port = number(`${prefix}Port`);
   return {
     observedAt,
     online: true,
@@ -30,11 +36,22 @@ export function normalizeTelemetry(
     powerWatts: number("power"),
     temperatureC: number("temp"),
     bestDifficulty: parseDifficulty(info.bestDiff),
+    bestSessionDifficulty: parseDifficulty(info.bestSessionDiff),
     accepted: number("sharesAccepted"),
     rejected: number("sharesRejected"),
     uptimeSeconds: number("uptimeSeconds"),
     firmware: text("version"),
-    pool: text("stratumURL"),
+    pool: text(`${prefix}URL`),
+    poolPort:
+      port !== null && Number.isInteger(port) && port >= 1 && port <= 65535
+        ? port
+        : null,
+    poolUser: text(`${prefix}User`),
+    poolMode: knownPool
+      ? usingFallback
+        ? "fallback"
+        : "primary"
+      : "unconfirmed",
     error: null,
   };
 }
@@ -49,4 +66,27 @@ export function deviceState(
   if ((latest.temperatureC ?? 0) >= 70 || latest.hashrateGhs === 0)
     return "warning";
   return "online";
+}
+
+/** Reasons use the same rules as the status badge; no warning is left unexplained. */
+export function warningReasons(
+  latest: Observation | null,
+  now: number,
+  staleSeconds: number,
+): string[] {
+  if (!latest) return ["Waiting for the first observation."];
+  if (now - latest.observedAt > staleSeconds)
+    return ["Telemetry is stale: no recent observation from the collector."];
+  if (!latest.online)
+    return [
+      latest.error ||
+        "The latest collection attempt could not reach this miner.",
+    ];
+  const reasons: string[] = [];
+  if ((latest.temperatureC ?? 0) >= 70)
+    reasons.push(
+      `High chip temperature: ${latest.temperatureC!.toFixed(1)} °C (warning at 70 °C).`,
+    );
+  if (latest.hashrateGhs === 0) reasons.push("Miner reports zero hashrate.");
+  return reasons;
 }

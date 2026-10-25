@@ -588,7 +588,7 @@ footer > span {
 }
 .detail-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 24px;
 }
@@ -1447,4 +1447,276 @@ footer > span {
 .button-ghost:hover {
   background: var(--surface-hover, #1e293b);
   color: var(--text-primary, #f1f5f9);
+}
+
+/* Per-device appearance and inspection. */
+.icon-edit-trigger {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.icon-edit-trigger:focus-visible {
+  outline: 2px solid var(--accent, #a59afa);
+  outline-offset: 3px;
+}
+.coin-icon {
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.coin-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.coin-icon.BTC {
+  background: #f7931a;
+  color: white;
+}
+.coin-icon.BCH {
+  background: #0b9c69;
+  color: white;
+}
+.coin-icon.DGB {
+  background: #0666cc;
+  color: white;
+}
+.device-name .coin-icon span,
+.coin-icon span {
+  font-size: 26px;
+  font-weight: 700;
+  color: inherit;
+  transform: rotate(12deg);
+  line-height: 1;
+}
+.coin-icon.BCH span {
+  transform: rotate(-12deg);
+}
+.coin-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.coin-icon.custom-icon {
+  background: transparent;
+}
+.add-miner-form select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--surface-base, #101722);
+  color: var(--text-primary, #e7ebf3);
+  border: 1px solid var(--border-default, #394356);
+  font: inherit;
+}
+.add-miner-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.add-miner-form legend {
+  margin-bottom: 10px;
+}
+.icon-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.icon-presets button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-default, #394356);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.icon-presets button[aria-pressed="true"] {
+  border-color: var(--accent, #a59afa);
+  background: var(--surface-hover, #242b40);
+}
+.icon-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.status-reason {
+  display: block;
+  max-width: 235px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted, #9aa8bd);
+  margin-top: 6px;
+  white-space: normal;
+}
+.device-reasons {
+  padding-left: 20px;
+  color: var(--text-primary, #e7ebf3);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.inspect-dialog {
+  max-width: 800px;
+}
+.history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0;
+}
+.device-history {
+  display: grid;
+  gap: 14px;
+}
+.device-history .trend-chart {
+  height: 155px;
+}
+.detail-list dd {
+  overflow-wrap: anywhere;
+}
+
+.add-miner-form .image-upload-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 20px;
+}
+
+.inspect-device-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.inspect-device-heading h2 {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .detail-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.temperature-unit-toggle {
+  display: inline-flex;
+  gap: 2px;
+}
+.temperature-unit-toggle button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted, #8997ad);
+  padding: 3px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.temperature-unit-toggle button[aria-pressed="true"] {
+  color: var(--text-accent, #a59afa);
+  background: var(--surface-hover, #202838);
+  border-color: var(--border-default, #394356);
+}
+.temperature-unit-toggle button:focus-visible {
+  outline: 2px solid var(--text-accent, #a59afa);
+  outline-offset: 2px;
+}
+
+.sensitive-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  vertical-align: baseline;
+}
+.sensitive-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.masked-value {
+  color: var(--text-muted, #8997ad);
+  font-style: italic;
+}
+.privacy-value-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, #8997ad);
+  cursor: pointer;
+}
+.privacy-value-toggle:hover {
+  color: var(--text-primary, #e7ebf3);
+  background: var(--surface-hover, #202838);
+}
+.privacy-value-toggle:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.privacy-value-toggle:focus-visible {
+  outline: 2px solid var(--text-accent, #a59afa);
+  outline-offset: 2px;
+}
+.device-name .sensitive-value {
+  display: inline-flex;
+  margin-top: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.dialog-top h2 .privacy-value-toggle {
+  margin-left: 3px;
+}
+.trend-legend .sensitive-value {
+  display: inline-flex;
+  gap: 5px;
+}
+.detail-list .sensitive-value {
+  justify-content: flex-end;
+}
+.privacy-toggle[aria-pressed="true"] {
+  color: var(--text-accent, #a59afa);
+}
+@media (max-width: 600px) {
+  .privacy-toggle-label {
+    display: none;
+  }
+}
+
+.device-name {
+  min-width: 210px;
+}
+.masked-value {
+  white-space: nowrap;
+}
+
+.temperature-setting {
+  margin-top: 24px;
+}
+.temperature-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.temperature-setting-row h3 {
+  margin: 0;
+}
+.temperature-setting p {
+  color: var(--text-muted, #8997ad);
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 8px 0 20px;
+}
+.temperature-setting .temperature-unit-toggle button {
+  padding: 6px 10px;
+  font-size: 12px;
 }

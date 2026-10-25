@@ -76,8 +76,13 @@ For a custom isolated environment, set `DEMO_MODE=1`, `PORT`, `APP_ORIGIN`, and 
 
 - **Add miner:** enter its private IPv4 address, check the connection, optionally choose a friendly name, then confirm. Checking alone does not register it. Verification expires after two minutes. Duplicate IP and MAC addresses are detected.
 - **Nicknames:** select the pencil beside a miner's name on Overview or Devices. Names are saved in the dashboard and chart legends; identity and history are preserved.
+- **Coin and icon:** select the icon beside a device name to manually label it BTC, BCH, DGB (SHA-256d), or leave it unassigned. Choose a preset icon independently, or upload a PNG/JPEG/WebP image up to 5 MB. Uploads are center-cropped to a 128 × 128 PNG and saved in SQLite; reset restores the coin icon. These dashboard labels do not change mining configuration or detect the coin.
 - **Settings:** use the top-bar dialog to change the collection interval. The default is 30 seconds, with a range of 10–3,600 seconds. The running collector applies saved changes without a restart.
-- **Inspect:** view device readings and recent history, or open the miner's own AxeOS interface.
+- **Inspect:** view hashrate, chip temperature, and power charts over 1, 6, or 24 hours, best difficulty since boot, uptime at the latest observation, Stratum host/port/user, and firmware. Open the miner's own AxeOS interface for controls.
+  Use **Settings → Temperature** to choose °C or °F for Inspect readings and charts. The choice applies immediately and is saved automatically in this browser.
+- **Pool accuracy:** host, port, and worker follow AxeOS's reported primary/fallback selection. If the firmware does not report selection, configured primary details are labelled unconfirmed. Older stored readings have no port/user or confirmed selection until fresh data arrives. Pool passwords are never collected.
+- **Screenshot privacy:** use the eye icon beside a sensitive value to hide/reveal it consistently across views. The top-bar Screenshot privacy toggle hides miner names, IPs, Stratum hosts/ports, worker or wallet strings, connection details, and custom images together; chart legends/tooltips use anonymous miner labels. Global mode locks individual reveal buttons until switched off and remembers your previous field choices. Preferences stay in this browser, including after reload. This masks the display for screenshots; stored data and API responses remain unchanged.
+- **Status explanations:** warning, offline, stale, and awaiting-data badges include a visible reason. High temperature (70°C or higher) and zero hashrate can both be reported together.
 
 Registration supports private IPv4 addresses. Hostnames, public/loopback/link-local addresses, custom ports, and redirects are rejected. Probes have request-duration and response-size limits. Browser writes require an application request header and an allowed origin.
 
@@ -125,7 +130,7 @@ Saved collection settings override the environment default. The collector needs 
 
 ## Storage, backup, and upgrade
 
-SQLite stores registered devices, nicknames, settings, and observations. Keep it on local storage; WAL mode requires local filesystem semantics. Never commit databases, WAL/SHM files, backups, `.env`, or real fleet configuration. Ignore rules cover these files.
+SQLite stores registered devices, nicknames, coin labels, custom icons, settings, and observations. Keep it on local storage; WAL mode requires local filesystem semantics. Never commit databases, WAL/SHM files, backups, `.env`, or real fleet configuration. Ignore rules cover these files.
 
 Use SQLite's online backup API for a running installation. For an offline file copy, stop both API and collector first and preserve any WAL/SHM files alongside the database. Store backups outside the repository and test restoration before depending on them.
 
@@ -156,6 +161,7 @@ CI runs formatting, type checks, tests, and builds on Node.js 22 and 24, plus a 
 | POST   | `/api/miners/probe`                | Verify an address and obtain a short-lived registration token.         |
 | POST   | `/api/miners`                      | Register a verified miner with an optional friendly name.              |
 | PATCH  | `/api/miners/:id`                  | Update a dashboard nickname.                                           |
+| PATCH  | `/api/miners/:id/appearance`       | Save manual coin and preset/custom icon preferences.                   |
 | GET    | `/api/settings`                    | Read the collection interval.                                          |
 | PATCH  | `/api/settings`                    | Save an integer collection interval from 10 to 3,600 seconds.          |
 

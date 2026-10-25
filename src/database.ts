@@ -63,6 +63,31 @@ export function openDatabase(path: string) {
         value INTEGER NOT NULL CHECK(value BETWEEN 10 AND 3600)
       ); INSERT INTO schema_migrations(version) VALUES (4);`);
     }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 5")
+        .get()
+    ) {
+      sqlite.exec(`
+        ALTER TABLE miners ADD COLUMN coin TEXT;
+        ALTER TABLE miners ADD COLUMN icon TEXT;
+        ALTER TABLE miners ADD COLUMN custom_icon TEXT;
+        ALTER TABLE observations ADD COLUMN pool_port INTEGER;
+        ALTER TABLE observations ADD COLUMN pool_user TEXT;
+        ALTER TABLE observations ADD COLUMN pool_mode TEXT;
+        INSERT INTO schema_migrations(version) VALUES (5);
+      `);
+    }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 6")
+        .get()
+    ) {
+      sqlite.exec(`
+        ALTER TABLE observations ADD COLUMN best_session_difficulty REAL;
+        INSERT INTO schema_migrations(version) VALUES (6);
+      `);
+    }
   })();
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }

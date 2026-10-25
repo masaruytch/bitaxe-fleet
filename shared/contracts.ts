@@ -1,6 +1,12 @@
 import type { MinerCompatibility } from "./compatibility.js";
 export type DeviceState =
   "online" | "warning" | "offline" | "stale" | "unknown";
+export type MiningCoin = "BTC" | "BCH" | "DGB";
+export interface MinerAppearance {
+  coin: MiningCoin | null;
+  icon: MiningCoin | null;
+  customIcon: string | null;
+}
 export interface Observation {
   observedAt: number;
   online: boolean;
@@ -8,11 +14,15 @@ export interface Observation {
   powerWatts: number | null;
   temperatureC: number | null;
   bestDifficulty: number | null;
+  bestSessionDifficulty?: number | null;
   accepted: number | null;
   rejected: number | null;
   uptimeSeconds: number | null;
   firmware: string | null;
   pool: string | null;
+  poolPort?: number | null;
+  poolUser?: string | null;
+  poolMode?: string | null;
   error: string | null;
 }
 export interface Device {
@@ -20,6 +30,10 @@ export interface Device {
   name: string;
   ip: string;
   algorithm: string;
+  coin?: string | null;
+  icon?: string | null;
+  customIcon?: string | null;
+  warningReasons?: string[];
   state: DeviceState;
   latest: Observation | null;
   lastSuccessfulAt: number | null;

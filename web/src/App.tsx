@@ -1,3 +1,13 @@
+import {
+  SensitiveValue,
+  PrivateConnectionDetails,
+  PrivacyToggle,
+  usePrivacy,
+  deviceField,
+} from "./components/Privacy";
+import { temperature, useTemperatureUnit } from "./components/temperature";
+import { DeviceIcon } from "./components/DeviceIcon";
+import { DeviceAppearance } from "./components/DeviceAppearance";
 import { formatDifficulty } from "../../shared/difficulty";
 import { lazy, Suspense, useState } from "react";
 import { Navigate, NavLink, Route, Routes } from "react-router";
@@ -24,17 +34,34 @@ import type {
   FleetResponse,
   HistoryResponse,
 } from "../../shared/contracts";
-const FleetTrends = lazy(() =>
-  import("./components/FleetTrends").then((module) => ({
-    default: module.FleetTrends,
-  })),
-);
 import { NicknameDialog, SettingsDialog } from "./components/FleetPreferences";
 import { CreateFleetWizard } from "./components/CreateFleetWizard";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { CompatibilityPage } from "./components/Compatibility";
 import { AddMinerDialog } from "./components/AddMinerDialog";
 import { Button } from "./components/ui/button";
+const FleetTrends = lazy(() =>
+  import("./components/FleetTrends").then((module) => ({
+    default: module.FleetTrends,
+  })),
+);
+const DeviceHistory = lazy(() =>
+  import("./components/DeviceHistory").then((module) => ({
+    default: module.DeviceHistory,
+  })),
+);
+function uptime(seconds: number | null | undefined) {
+  if (seconds == null) return "—";
+  const minutes = Math.floor(seconds / 60);
+  return `${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`;
+}
+function poolLabel(mode: string | null | undefined) {
+  return mode === "fallback"
+    ? "Active fallback"
+    : mode === "primary"
+      ? "Active primary"
+      : "Configured primary · active pool unconfirmed";
+}
 async function request<T>(path: string): Promise<T> {
   const result = await fetch(path);
   if (!result.ok)
@@ -63,8 +90,16 @@ const stateLabel = {
   unknown: "Awaiting data",
 };
 function StateBadge({ device }: { device: Device }) {
+  const privacy = usePrivacy();
   return (
-    <span className={`state state-${device.state}`}>
+    <span
+      className={`state state-${device.state}`}
+      title={
+        !device.latest?.online && privacy.anyHidden
+          ? "Connection details hidden"
+          : device.warningReasons?.join(" ")
+      }
+    >
       <span />
       {stateLabel[device.state]}
     </span>
@@ -77,11 +112,16 @@ function ErrorState({
   message: string;
   retry: () => void;
 }) {
+  const privacy = usePrivacy();
   return (
     <div className="empty error" role="alert">
       <WifiOff size={25} />
       <h2>Couldn’t load telemetry</h2>
-      <p>{message}</p>
+      <p>
+        {privacy.anyHidden
+          ? "Could not load readings. Details hidden for privacy."
+          : message}
+      </p>
       <Button variant="outline" onClick={retry}>
         Try again
       </Button>
@@ -96,6 +136,14 @@ function DeviceDialog({
   demo?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [hours, setHours] = useState(24);
+  const [temperatureUnit] = useTemperatureUnit();
+  const privacy = usePrivacy();
+  const displayName = privacy.text(
+    deviceField(device.id, "name"),
+    device.name,
+    "Hidden miner",
+  );
   const history = useQuery({
     queryKey: ["history", device.id],
     queryFn: () =>
@@ -110,17 +158,27 @@ function DeviceDialog({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="ghost" size="sm" aria-label={`Inspect ${device.name}`}>
+        <Button variant="ghost" size="sm" aria-label={`Inspect ${displayName}`}>
           Inspect <ArrowUpRight size={14} />
         </Button>
       </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content">
+        <Dialog.Content className="dialog-content inspect-dialog">
           <div className="dialog-top">
-            <div>
-              <span className="eyebrow">DEVICE TELEMETRY</span>
-              <Dialog.Title>{device.name}</Dialog.Title>
+            <div className="inspect-device-heading">
+              <DeviceIcon device={device} />
+              <div>
+                <span className="eyebrow">DEVICE TELEMETRY</span>
+                <Dialog.Title>
+                  <SensitiveValue
+                    fieldKey={deviceField(device.id, "name")}
+                    value={device.name}
+                    label="miner name"
+                    hiddenText="Hidden miner"
+                  />
+                </Dialog.Title>
+              </div>
             </div>
             <Dialog.Close asChild>
               <Button variant="ghost" aria-label="Close device details">
@@ -129,10 +187,28 @@ function DeviceDialog({
             </Dialog.Close>
           </div>
           <Dialog.Description>
-            {device.ip} · SHA-256 · Latest observation{" "}
+            <SensitiveValue
+              fieldKey={deviceField(device.id, "ip")}
+              value={device.ip}
+              label="IP address"
+            />{" "}
+            · {device.coin ?? "Coin unassigned"} · SHA-256 · Latest observation{" "}
             {timestamp(latest?.observedAt)}
           </Dialog.Description>
           <StateBadge device={device} />
+          {!!device.warningReasons?.length && (
+            <ul className="device-reasons" aria-label="Device status details">
+              {device.warningReasons.map((reason) => (
+                <li key={reason}>
+                  {device.latest?.online ? (
+                    reason
+                  ) : (
+                    <PrivateConnectionDetails id={device.id} value={reason} />
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="detail-metrics">
             <div>
               <span>Hashrate</span>
@@ -149,7 +225,8 @@ function DeviceDialog({
             <div>
               <span>Temperature</span>
               <strong>
-                {number(latest?.temperatureC, 1)} <small>°C</small>
+                {number(temperature(latest?.temperatureC, temperatureUnit), 1)}{" "}
+                <small>°{temperatureUnit}</small>
               </strong>
             </div>
             <div>
@@ -158,8 +235,27 @@ function DeviceDialog({
                 {number(latest?.powerWatts, 1)} <small>W</small>
               </strong>
             </div>
+            <div title="Best difficulty since the miner last booted, reported by AxeOS">
+              <span>Best Difficulty (since boot)</span>
+              <strong>{formatDifficulty(latest?.bestSessionDifficulty)}</strong>
+            </div>
           </div>
-          <h3>Last 24 hours</h3>
+          <div className="history-heading">
+            <h3>Device history</h3>
+            <div role="group" aria-label="History time range">
+              {[1, 6, 24].map((range) => (
+                <Button
+                  key={range}
+                  size="sm"
+                  variant={hours === range ? "default" : "ghost"}
+                  aria-pressed={hours === range}
+                  onClick={() => setHours(range)}
+                >
+                  {range}h
+                </Button>
+              ))}
+            </div>
+          </div>
           {history.isPending ? (
             <p role="status">Loading history…</p>
           ) : history.isError ? (
@@ -171,11 +267,28 @@ function DeviceDialog({
             />
           ) : points.length ? (
             <>
-              <Sparkline samples={points} large />
+              <Suspense fallback={<p role="status">Loading charts…</p>}>
+                <DeviceHistory
+                  samples={points}
+                  hours={hours}
+                  temperatureUnit={temperatureUnit}
+                />
+              </Suspense>
               <p className="muted">
-                {points.length} observations ·{" "}
-                {points.filter((p) => !p.online).length} failed polls · gaps
-                indicate unavailable readings.
+                {
+                  points.filter(
+                    (p) => p.observedAt >= Date.now() / 1000 - hours * 3600,
+                  ).length
+                }{" "}
+                observations ·{" "}
+                {
+                  points.filter(
+                    (p) =>
+                      !p.online &&
+                      p.observedAt >= Date.now() / 1000 - hours * 3600,
+                  ).length
+                }{" "}
+                failed polls · gaps indicate unavailable readings.
               </p>
             </>
           ) : (
@@ -185,8 +298,47 @@ function DeviceDialog({
           )}
           <dl className="detail-list">
             <div>
-              <dt>Pool host</dt>
-              <dd>{latest?.pool ?? "—"}</dd>
+              <dt>Stratum host</dt>
+              <dd>
+                <SensitiveValue
+                  fieldKey={deviceField(device.id, "pool")}
+                  value={latest?.pool}
+                  label="Stratum host"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Stratum port</dt>
+              <dd>
+                <SensitiveValue
+                  fieldKey={deviceField(device.id, "port")}
+                  value={latest?.poolPort}
+                  label="Stratum port"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Stratum user / worker</dt>
+              <dd>
+                <SensitiveValue
+                  fieldKey={deviceField(device.id, "worker")}
+                  value={latest?.poolUser}
+                  label="worker or wallet"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt>Pool selection</dt>
+              <dd>
+                {latest?.online ? poolLabel(latest.poolMode) : "Unavailable"}
+              </dd>
+            </div>
+            <div>
+              <dt>Uptime</dt>
+              <dd>
+                {uptime(latest?.uptimeSeconds)}{" "}
+                <small>(at latest observation)</small>
+              </dd>
             </div>
             <div>
               <dt>Firmware</dt>
@@ -203,7 +355,7 @@ function DeviceDialog({
               </dd>
             </div>
           </dl>
-          {!demo && (
+          {!demo && !privacy.isHidden(deviceField(device.id, "ip")) && (
             <a
               className="axeos-link"
               href={`http://${device.ip.includes(":") ? `[${device.ip}]` : device.ip}/#/`}
@@ -213,7 +365,6 @@ function DeviceDialog({
               Open this device in AxeOS <ArrowUpRight size={14} />
             </a>
           )}
-          {latest?.error && <p className="notice warning">{latest.error}</p>}
           <p className="notice">
             <ShieldCheck size={16} /> Read-only fleet monitoring. Device
             configuration stays in AxeOS.
@@ -223,101 +374,9 @@ function DeviceDialog({
     </Dialog.Root>
   );
 }
-function Sparkline({
-  samples,
-  large = false,
-}: {
-  samples: HistoryResponse["observations"];
-  large?: boolean;
-}) {
-  const now = Math.floor(Date.now() / 1000);
-  const start = now - 86400;
-  const valid = samples.filter(
-    (p) => p.observedAt >= start && p.online && p.hashrateGhs !== null,
-  );
-  if (!valid.length) return <span className="muted">No hashrate samples</span>;
-  const maximum = Math.max(...valid.map((p) => p.hashrateGhs!), 1) * 1.1;
-  // Collection intervals can change over time. Infer the observed cadence so
-  // valid, less frequent samples are not rendered as disconnected points.
-  const intervals = samples
-    .slice(1)
-    .map((sample, index) => sample.observedAt - samples[index].observedAt)
-    .filter((interval) => interval > 0)
-    .sort((a, b) => a - b);
-  const maxGap = Math.max(
-    180,
-    (intervals[Math.floor(intervals.length / 2)] ?? 60) * 1.8,
-  );
-  const segments: string[] = [];
-  let segment = "";
-  let previous = 0;
-  for (const sample of samples) {
-    if (sample.observedAt < start) continue;
-    if (
-      !sample.online ||
-      sample.hashrateGhs === null ||
-      (previous && sample.observedAt - previous > maxGap)
-    ) {
-      if (segment) segments.push(segment);
-      segment = "";
-    }
-    if (sample.online && sample.hashrateGhs !== null) {
-      const x = Math.min(
-        600,
-        Math.max(0, ((sample.observedAt - start) / 86400) * 600),
-      );
-      const y = 115 - (sample.hashrateGhs / maximum) * 105;
-      segment += `${segment ? " L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
-    }
-    previous = sample.observedAt;
-  }
-  if (segment) segments.push(segment);
-  return (
-    <div className={large ? "sparkline large" : "sparkline"}>
-      <svg
-        viewBox="0 0 600 125"
-        role="img"
-        aria-label="Recorded device hashrate over the last 24 hours; gaps indicate missing observations"
-      >
-        <path
-          d="M0 115H600 M0 65H600 M0 15H600"
-          stroke="currentColor"
-          opacity=".12"
-          fill="none"
-        />
-        {segments.map((d, i) => (
-          <path
-            key={i}
-            d={d}
-            stroke="currentColor"
-            fill="none"
-            strokeWidth="2"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        ))}
-        {valid.map((sample, index) => (
-          <circle
-            key={index}
-            cx={Math.min(
-              600,
-              Math.max(0, ((sample.observedAt - start) / 86400) * 600),
-            )}
-            cy={115 - (sample.hashrateGhs! / maximum) * 105}
-            r="1.3"
-            fill="currentColor"
-          />
-        ))}
-      </svg>
-      <div className="chart-labels">
-        <span>24 hours ago</span>
-        <span>Now · {number(maximum / 1000, 2)} TH/s chart ceiling</span>
-      </div>
-    </div>
-  );
-}
 function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
   const fleet = useFleet();
+  const privacy = usePrivacy();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   if (fleet.isPending)
@@ -488,6 +547,8 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
             <Search size={16} />
             <input
               aria-label="Search devices"
+              type={privacy.anyHidden ? "password" : "text"}
+              autoComplete="off"
               placeholder="Search name, IP, or pool…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -557,7 +618,7 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                   <th className="numeric">Power</th>
                   <th className="numeric">Temp.</th>
                   <th className="numeric">Best Difficulty</th>
-                  <th>Pool host</th>
+                  <th>Stratum host</th>
                   <th>
                     <span>Details</span>
                   </th>
@@ -568,20 +629,48 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                   <tr key={device.id}>
                     <td>
                       <div className="device-name">
-                        <div className="device-icon">
-                          <Cpu size={18} />
-                        </div>
+                        {demo ? (
+                          <DeviceIcon device={device} />
+                        ) : (
+                          <DeviceAppearance device={device} />
+                        )}
                         <div>
                           <div className="nickname-row">
-                            <strong>{device.name}</strong>
+                            <strong>
+                              <SensitiveValue
+                                fieldKey={deviceField(device.id, "name")}
+                                value={device.name}
+                                label="miner name"
+                                hiddenText="Hidden miner"
+                              />
+                            </strong>
                             {!demo && <NicknameDialog device={device} />}
                           </div>
-                          <span>{device.ip}</span>
+                          <span>
+                            <SensitiveValue
+                              fieldKey={deviceField(device.id, "ip")}
+                              value={device.ip}
+                              label="IP address"
+                            />
+                            {device.coin ? ` · ${device.coin}` : ""}
+                          </span>
                         </div>
                       </div>
                     </td>
                     <td>
                       <StateBadge device={device} />
+                      {!!device.warningReasons?.length && (
+                        <small className="status-reason">
+                          {device.latest?.online ? (
+                            device.warningReasons.join(" ")
+                          ) : (
+                            <PrivateConnectionDetails
+                              id={device.id}
+                              value={device.warningReasons.join(" ")}
+                            />
+                          )}
+                        </small>
+                      )}
                     </td>
                     <td className="numeric">
                       <strong>
@@ -616,8 +705,17 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                     </td>
                     <td>
                       <span className="pool-host">
-                        {device.latest?.pool ?? "—"}
+                        <SensitiveValue
+                          fieldKey={deviceField(device.id, "pool")}
+                          value={device.latest?.pool}
+                          label="Stratum host"
+                        />
                       </span>
+                      <small className="status-reason">
+                        {device.latest?.online
+                          ? poolLabel(device.latest.poolMode)
+                          : "Unavailable"}
+                      </small>
                     </td>
                     <td>
                       <DeviceDialog device={device} demo={demo} />
@@ -713,6 +811,7 @@ export function App() {
             FLEET MONITORING
           </span>
           <span className="topbar-right">
+            <PrivacyToggle />
             <ThemeToggle />
             <span className="miner-access">
               <ShieldCheck size={14} /> Read-only miner access

@@ -26,3 +26,46 @@ test("best difficulty accepts both numeric and compact AxeOS readings", () => {
   assert.equal(formatDifficulty(null), "—");
   assert.equal(formatDifficulty(0), "0");
 });
+
+test("session best difficulty is independent of all-time best, resets after boot and never falls back", async () => {
+  const { openDatabase } = await import("../src/database.js");
+  const { saveObservation, listFleet, deviceHistory } =
+    await import("../src/store.js");
+  const { miners } = await import("../src/schema.js");
+  const store = openDatabase(":memory:");
+  const raw = { hashRate: 1000, power: 17, temp: 50, bestDiff: "7.81T" };
+  try {
+    store.db
+      .insert(miners)
+      .values({
+        id: "test",
+        name: "Test",
+        ip: "192.0.2.1",
+        algorithm: "sha256",
+      })
+      .run();
+    for (const [at, value, expected] of [
+      [100, "42.04G", 42.04e9],
+      [130, 0, 0],
+      [160, 123, 123],
+      [190, undefined, null],
+      [220, "invalid", null],
+    ] as const) {
+      const observation = normalizeTelemetry(
+        { ...raw, bestSessionDiff: value },
+        at,
+      );
+      assert.equal(observation.bestSessionDifficulty, expected);
+      saveObservation(store, "test", observation);
+      const device = listFleet(store, at, 180)[0];
+      assert.equal(device.latest?.bestSessionDifficulty, expected);
+      assert.equal(device.latest?.bestDifficulty, 7.81e12);
+    }
+    assert.equal(
+      deviceHistory(store, "test", 100)[0].bestSessionDifficulty,
+      42.04e9,
+    );
+  } finally {
+    store.sqlite.close();
+  }
+});

@@ -1,3 +1,5 @@
+import { saveAppearance, MAX_ICON_LENGTH } from "./appearance.js";
+import type { MinerAppearance } from "../shared/contracts.js";
 import { isDemoDatabase } from "./demo.js";
 import { getPollingInterval, setPollingInterval } from "./settings.js";
 import {
@@ -285,6 +287,38 @@ export async function createApp(
       },
     },
     async (request) => renameMiner(store, request.params.id, request.body.name),
+  );
+  app.patch<{ Params: { id: string }; Body: MinerAppearance }>(
+    "/api/miners/:id/appearance",
+    {
+      bodyLimit: 100000,
+      preHandler: writeGuard,
+      schema: {
+        params: {
+          type: "object",
+          required: ["id"],
+          properties: {
+            id: { type: "string", pattern: "^[a-zA-Z0-9_-]{1,64}$" },
+          },
+        },
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["coin", "icon", "customIcon"],
+          properties: {
+            coin: { enum: [null, "BTC", "BCH", "DGB"] },
+            icon: { enum: [null, "BTC", "BCH", "DGB"] },
+            customIcon: {
+              anyOf: [
+                { type: "null" },
+                { type: "string", maxLength: MAX_ICON_LENGTH },
+              ],
+            },
+          },
+        },
+      },
+    },
+    async (request) => saveAppearance(store, request.params.id, request.body),
   );
   const webRoot = options.webRoot ?? resolve("dist/web");
   if (existsSync(resolve(webRoot, "index.html"))) {

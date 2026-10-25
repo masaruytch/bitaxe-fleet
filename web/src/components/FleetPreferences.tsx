@@ -1,3 +1,5 @@
+import { useTemperatureUnit } from "./temperature";
+import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -33,7 +35,7 @@ function PreferenceDialog({
   onOpenChange,
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   trigger: ReactNode;
   onOpen: () => void;
   children: ReactNode;
@@ -77,6 +79,7 @@ function PreferenceDialog({
   );
 }
 export function NicknameDialog({ device }: { device: Device }) {
+  const privacy = usePrivacy();
   const client = useQueryClient();
   const [open, setOpen] = useState(false),
     [name, setName] = useState(device.name),
@@ -107,13 +110,23 @@ export function NicknameDialog({ device }: { device: Device }) {
   return (
     <PreferenceDialog
       title="Edit nickname"
-      description={`${device.ip} · Choose a name to recognize this miner across your fleet and charts.`}
+      description={
+        <>
+          <SensitiveValue
+            fieldKey={deviceField(device.id, "ip")}
+            value={device.ip}
+            label="IP address"
+          />{" "}
+          · Choose a name to recognize this miner across your fleet and charts.
+        </>
+      }
       trigger={
         <Button
           variant="ghost"
           size="sm"
           className="nickname-edit"
-          aria-label={`Edit nickname for ${device.name}`}
+          aria-label={`Edit nickname for ${privacy.text(deviceField(device.id, "name"), device.name, "hidden miner")}`}
+          disabled={privacy.isHidden(deviceField(device.id, "name"))}
         >
           <Pencil size={13} />
         </Button>
@@ -132,6 +145,11 @@ export function NicknameDialog({ device }: { device: Device }) {
           id={`nickname-${device.id}`}
           autoFocus
           value={name}
+          type={
+            privacy.isHidden(deviceField(device.id, "name"))
+              ? "password"
+              : "text"
+          }
           onChange={(event) => setName(event.target.value)}
           maxLength={64}
           required
@@ -162,6 +180,7 @@ export function NicknameDialog({ device }: { device: Device }) {
   );
 }
 export function SettingsDialog() {
+  const [temperatureUnit, setTemperatureUnit] = useTemperatureUnit();
   const client = useQueryClient();
   const [open, setOpen] = useState(false),
     [interval, setInterval] = useState(""),
@@ -213,7 +232,7 @@ export function SettingsDialog() {
   return (
     <PreferenceDialog
       title="Settings"
-      description="Choose how often the dashboard collects fresh readings from all registered miners."
+      description="Choose your temperature display and how often the dashboard collects readings."
       trigger={
         <Button variant="ghost" size="sm" className="settings-trigger">
           <Settings size={15} />
@@ -227,6 +246,35 @@ export function SettingsDialog() {
       open={open}
       onOpenChange={setOpen}
     >
+      <section
+        className="temperature-setting"
+        aria-labelledby="temperature-setting-label"
+      >
+        <div className="temperature-setting-row">
+          <h3 id="temperature-setting-label">Temperature</h3>
+          <div
+            className="temperature-unit-toggle"
+            role="group"
+            aria-label="Temperature unit"
+          >
+            {(["C", "F"] as const).map((unit) => (
+              <button
+                type="button"
+                key={unit}
+                aria-label={`Show temperatures in ${unit === "C" ? "Celsius" : "Fahrenheit"}`}
+                aria-pressed={temperatureUnit === unit}
+                onClick={() => setTemperatureUnit(unit)}
+              >
+                °{unit}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p>
+          Applies immediately to Inspect readings and charts. Saved
+          automatically in this browser.
+        </p>
+      </section>
       <form className="add-miner-form" onSubmit={save}>
         <label htmlFor="collection-interval">
           Collection interval (seconds)

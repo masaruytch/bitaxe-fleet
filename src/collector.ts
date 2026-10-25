@@ -102,6 +102,7 @@ export async function collectOnce(
               powerWatts: null,
               temperatureC: null,
               bestDifficulty: null,
+              bestSessionDifficulty: null,
               accepted: null,
               rejected: null,
               uptimeSeconds: null,

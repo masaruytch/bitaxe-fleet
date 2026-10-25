@@ -1,3 +1,4 @@
+import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -24,12 +25,13 @@ interface ChartSeries {
   key: string;
   name: string;
   color: string;
+  privacyKey?: string;
 }
 interface ChartRow {
   at: number;
   [key: string]: number | null;
 }
-function TrendChart({
+export function TrendChart({
   title,
   subtitle,
   unit,
@@ -152,7 +154,16 @@ function TrendChart({
             {series.map((line) => (
               <span key={line.key}>
                 <i style={{ background: line.color }} />
-                {line.name}
+                {line.privacyKey ? (
+                  <SensitiveValue
+                    fieldKey={line.privacyKey}
+                    value={line.name}
+                    label="miner name"
+                    hiddenText={line.name}
+                  />
+                ) : (
+                  line.name
+                )}
               </span>
             ))}
           </div>
@@ -168,6 +179,7 @@ function TrendChart({
   );
 }
 export function FleetTrends() {
+  const privacy = usePrivacy();
   const [hours, setHours] = useState(24);
   const result = useQuery({
     queryKey: ["fleet-trends", hours],
@@ -260,7 +272,12 @@ export function FleetTrends() {
               rows={temperatureRows}
               series={data!.devices.map((device, i) => ({
                 key: `device${i}`,
-                name: device.name,
+                name: privacy.text(
+                  deviceField(device.id, "name"),
+                  device.name,
+                  `Miner ${i + 1}`,
+                ),
+                privacyKey: deviceField(device.id, "name"),
                 color: colors[i % colors.length],
               }))}
               hours={hours}

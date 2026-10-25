@@ -1,3 +1,4 @@
+import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -29,6 +30,7 @@ export function MinerRegistrationForm({
   onCancel: () => void;
   onBusyChange?: (busy: boolean) => void;
 }) {
+  const privacy = usePrivacy();
   const client = useQueryClient();
   const [ip, setIp] = useState(""),
     [name, setName] = useState(""),
@@ -91,6 +93,15 @@ export function MinerRegistrationForm({
       onBusyChange?.(false);
     }
   }
+  if (privacy.all)
+    return (
+      <div className="notice">
+        <p>Turn off Screenshot privacy before connecting a miner.</p>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    );
   return (
     <>
       {!probe ? (
@@ -118,7 +129,9 @@ export function MinerRegistrationForm({
           </p>
           {error && (
             <div className="notice warning" role="alert">
-              {error}
+              {privacy.anyHidden
+                ? "Request failed. Details hidden for privacy."
+                : error}
             </div>
           )}
           <div className="dialog-actions">
@@ -141,7 +154,13 @@ export function MinerRegistrationForm({
             <CheckCircle2 size={19} />
             <div>
               <strong>AxeOS device detected</strong>
-              <span>{probe.ip}</span>
+              <span>
+                <SensitiveValue
+                  fieldKey="registration:ip"
+                  value={probe.ip}
+                  label="IP address"
+                />
+              </span>
             </div>
           </div>
           {probe.compatibility && (
@@ -160,7 +179,13 @@ export function MinerRegistrationForm({
             </div>
             <div>
               <dt>Hostname</dt>
-              <dd>{probe.hostname ?? "Not reported"}</dd>
+              <dd>
+                <SensitiveValue
+                  fieldKey="registration:hostname"
+                  value={probe.hostname}
+                  label="hostname"
+                />
+              </dd>
             </div>
             <div>
               <dt>ASIC model</dt>
@@ -172,7 +197,13 @@ export function MinerRegistrationForm({
             </div>
             <div>
               <dt>Hardware address</dt>
-              <dd>{probe.macAddress}</dd>
+              <dd>
+                <SensitiveValue
+                  fieldKey="registration:mac"
+                  value={probe.macAddress}
+                  label="MAC address"
+                />
+              </dd>
             </div>
             <div>
               <dt>Current hashrate</dt>
@@ -190,8 +221,19 @@ export function MinerRegistrationForm({
           </dl>
           {probe.existingDevice ? (
             <div className="notice" role="status">
-              Already in your fleet as {probe.existingDevice.name} (
-              {probe.existingDevice.ip}). No duplicate was added.
+              Already in your fleet as{" "}
+              <SensitiveValue
+                fieldKey={deviceField(probe.existingDevice.id, "name")}
+                value={probe.existingDevice.name}
+                label="miner name"
+              />{" "}
+              (
+              <SensitiveValue
+                fieldKey={deviceField(probe.existingDevice.id, "ip")}
+                value={probe.existingDevice.ip}
+                label="IP address"
+              />
+              ). No duplicate was added.
             </div>
           ) : (
             <>
@@ -200,6 +242,11 @@ export function MinerRegistrationForm({
               </label>
               <input
                 id="miner-name"
+                type={
+                  privacy.isHidden("registration:hostname")
+                    ? "password"
+                    : "text"
+                }
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={64}
@@ -211,7 +258,9 @@ export function MinerRegistrationForm({
           )}
           {error && (
             <div className="notice warning" role="alert">
-              {error}
+              {privacy.anyHidden
+                ? "Request failed. Details hidden for privacy."
+                : error}
             </div>
           )}
           <div className="dialog-actions">
@@ -247,6 +296,7 @@ export function MinerRegistrationForm({
   );
 }
 export function AddMinerDialog() {
+  const privacy = usePrivacy();
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [added, setAdded] = useState("");
@@ -291,7 +341,7 @@ export function AddMinerDialog() {
               onCancel={() => setOpen(false)}
               onAdded={(device) => {
                 setAdded(
-                  `${device.name} added to the fleet. Monitoring has started.`,
+                  `${privacy.text(deviceField(device.id, "name"), device.name, "Miner")} added to the fleet. Monitoring has started.`,
                 );
                 setOpen(false);
               }}

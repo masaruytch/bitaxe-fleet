@@ -2,7 +2,7 @@ import { asc, desc, eq, and, gte, lt } from "drizzle-orm";
 import { miners, observations } from "./schema.js";
 import type { AppDatabase } from "./database.js";
 import type { Observation, Device } from "../shared/contracts.js";
-import { deviceState } from "./telemetry.js";
+import { deviceState, warningReasons } from "./telemetry.js";
 export function saveObservation(
   store: AppDatabase,
   minerId: string,
@@ -50,6 +50,7 @@ export function listFleet(
         latest,
         lastSuccessfulAt: lastSuccess?.at ?? null,
         state: deviceState(latest, now, staleSeconds),
+        warningReasons: warningReasons(latest, now, staleSeconds),
       };
     });
 }

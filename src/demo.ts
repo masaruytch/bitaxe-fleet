@@ -32,6 +32,7 @@ function reading(index: number, at: number, epoch: number): Observation {
       powerWatts: null,
       temperatureC: null,
       bestDifficulty: null,
+      bestSessionDifficulty: null,
       accepted: null,
       rejected: null,
       uptimeSeconds: null,
@@ -62,11 +63,15 @@ function reading(index: number, at: number, epoch: number): Observation {
       (device.temp + warming + Math.sin(hour * 0.9 + index) * 3).toFixed(1),
     ),
     bestDifficulty: device.best,
+    bestSessionDifficulty: device.best / 4,
     accepted: Math.floor((at - epoch + 172800) / 5) + index * 100,
     rejected: 2 + index,
     uptimeSeconds: at - epoch + 172800,
     firmware: "Demo firmware",
-    pool: "pool.demo.example",
+    pool: index === 2 ? "fallback.demo.example" : "pool.demo.example",
+    poolMode: index === 2 ? "fallback" : "primary",
+    poolPort: 3333,
+    poolUser: `demo.worker${index + 1}`,
     error: null,
   };
 }
@@ -99,6 +104,7 @@ export function prepareDemoData(
             name: device.name,
             ip: `192.0.2.${11 + index}`,
             algorithm: "sha256",
+            coin: ["BTC", "BCH", "DGB"][index % 3],
             registeredAt: at - 86400,
             model: index % 2 ? "Demo Supra" : "Demo Gamma",
           })

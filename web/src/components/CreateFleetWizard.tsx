@@ -1,3 +1,4 @@
+import { SensitiveValue, deviceField } from "./Privacy";
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
@@ -232,7 +233,14 @@ export function CreateFleetWizard({
             <>
               <div className="setup-success">
                 <CheckCircle2 size={40} />
-                <h3>{miner?.name} is connected</h3>
+                <h3>
+                  <SensitiveValue
+                    fieldKey={deviceField(miner?.id ?? "registration", "name")}
+                    value={miner?.name}
+                    label="miner name"
+                  />{" "}
+                  is connected
+                </h3>
                 <p>{miner?.ip}</p>
                 <p>
                   Your dashboard starts with the first reading. Trends will
