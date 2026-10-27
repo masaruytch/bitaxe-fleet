@@ -18,10 +18,12 @@ export function listFleet(
   store: AppDatabase,
   now: number,
   staleSeconds: number,
+  workspaceId?: string,
 ): Device[] {
   return store.db
     .select()
     .from(miners)
+    .where(workspaceId ? eq(miners.workspaceId, workspaceId) : undefined)
     .orderBy(asc(miners.name))
     .all()
     .map((miner) => {
@@ -58,6 +60,7 @@ export function deviceHistory(
   store: AppDatabase,
   id: string,
   since: number,
+  limit = 10000,
 ): Observation[] {
   return store.db
     .select()
@@ -66,7 +69,7 @@ export function deviceHistory(
       and(eq(observations.minerId, id), gte(observations.observedAt, since)),
     )
     .orderBy(desc(observations.observedAt))
-    .limit(10000)
+    .limit(limit)
     .all()
     .reverse();
 }

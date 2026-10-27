@@ -40,3 +40,50 @@ export function deviceChartRows(
   rows.push(empty(end));
   return rows;
 }
+
+/** Average uninterrupted readings within each time bucket; nulls always break a segment. */
+export function aggregateDeviceRows(
+  rows: ReturnType<typeof deviceChartRows>,
+  start: number,
+  bucketSeconds: number,
+) {
+  const result: typeof rows = [];
+  let segment: typeof rows = [];
+  let bucket = -1;
+  let mask = "";
+  const flush = () => {
+    if (!segment.length) return;
+    const average = (key: "hash" | "temp" | "power") => {
+      const values = segment
+        .map((row) => row[key])
+        .filter((value): value is number => value !== null);
+      return values.length
+        ? values.reduce((sum, value) => sum + value, 0) / values.length
+        : null;
+    };
+    result.push({
+      at: segment.at(-1)!.at,
+      hash: average("hash"),
+      temp: average("temp"),
+      power: average("power"),
+    });
+    segment = [];
+  };
+  for (const row of rows) {
+    if (row.hash === null && row.temp === null && row.power === null) {
+      flush();
+      result.push(row);
+      bucket = -1;
+      mask = "";
+      continue;
+    }
+    const nextBucket = Math.floor((row.at - start) / bucketSeconds);
+    const nextMask = `${row.hash === null}:${row.temp === null}:${row.power === null}`;
+    if (segment.length && (nextBucket !== bucket || nextMask !== mask)) flush();
+    bucket = nextBucket;
+    mask = nextMask;
+    segment.push(row);
+  }
+  flush();
+  return result;
+}

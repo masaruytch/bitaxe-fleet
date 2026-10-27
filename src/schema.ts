@@ -5,11 +5,18 @@ import {
   real,
   primaryKey,
 } from "drizzle-orm/sqlite-core";
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  pollIntervalSeconds: integer("poll_interval_seconds"),
+  temperatureUnit: text("temperature_unit").notNull().default("C"),
+});
 export const miners = sqliteTable("miners", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   ip: text("ip").notNull().unique(),
   algorithm: text("algorithm").notNull(),
+  workspaceId: text("workspace_id").notNull().default("default"),
   coin: text("coin"),
   icon: text("icon"),
   customIcon: text("custom_icon"),

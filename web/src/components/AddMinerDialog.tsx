@@ -1,3 +1,5 @@
+import { useWorkspace, workspaceField } from "./Workspaces";
+import { temperature, useTemperatureUnit } from "./temperature";
 import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +33,8 @@ export function MinerRegistrationForm({
   onBusyChange?: (busy: boolean) => void;
 }) {
   const privacy = usePrivacy();
+  const workspace = useWorkspace();
+  const [temperatureUnit] = useTemperatureUnit();
   const client = useQueryClient();
   const [ip, setIp] = useState(""),
     [name, setName] = useState(""),
@@ -77,10 +81,12 @@ export function MinerRegistrationForm({
       const device = await post<AddedMiner>("/api/miners", {
         probeToken: probe.probeToken,
         name: name.trim(),
+        workspaceId: workspace.workspaceId,
       });
       await Promise.all([
         client.invalidateQueries({ queryKey: ["fleet"] }),
         client.invalidateQueries({ queryKey: ["fleet-trends"] }),
+        client.invalidateQueries({ queryKey: ["workspaces"] }),
       ]);
       onAdded(device);
       setProbe(null);
@@ -104,6 +110,16 @@ export function MinerRegistrationForm({
     );
   return (
     <>
+      <p className="registration-workspace">
+        Workspace:{" "}
+        <strong>
+          {privacy.text(
+            workspaceField(workspace.workspaceId),
+            workspace.active?.name ?? "My mining fleet",
+            "Hidden workspace",
+          )}
+        </strong>
+      </p>
       {!probe ? (
         <form onSubmit={check} className="add-miner-form">
           <label htmlFor="miner-ip">IP address</label>
@@ -214,8 +230,12 @@ export function MinerRegistrationForm({
             <div>
               <dt>Temperature / power</dt>
               <dd>
-                {probe.observation.temperatureC?.toFixed(1)} °C /{" "}
-                {probe.observation.powerWatts?.toFixed(1)} W
+                {temperature(
+                  probe.observation.temperatureC,
+                  temperatureUnit,
+                )?.toFixed(1) ?? "—"}{" "}
+                °{temperatureUnit} / {probe.observation.powerWatts?.toFixed(1)}{" "}
+                W
               </dd>
             </div>
           </dl>
@@ -233,7 +253,14 @@ export function MinerRegistrationForm({
                 value={probe.existingDevice.ip}
                 label="IP address"
               />
-              ). No duplicate was added.
+              ) in{" "}
+              {privacy.text(
+                workspaceField(probe.existingDevice.workspaceId ?? "default"),
+                probe.existingDevice.workspaceName ?? "My mining fleet",
+                "a hidden workspace",
+              )}
+              . No duplicate was added. Use Inspect to move it between
+              workspaces.
             </div>
           ) : (
             <>

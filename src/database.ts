@@ -88,6 +88,46 @@ export function openDatabase(path: string) {
         INSERT INTO schema_migrations(version) VALUES (6);
       `);
     }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 7")
+        .get()
+    ) {
+      // SQLite cannot add a non-null REFERENCES column with an existing default.
+      // Triggers enforce workspace membership without rebuilding miners/history.
+      sqlite.exec(`
+        CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL COLLATE NOCASE UNIQUE);
+        INSERT INTO workspaces VALUES ('default', 'My mining fleet');
+        ALTER TABLE miners ADD COLUMN workspace_id TEXT NOT NULL DEFAULT 'default';
+        CREATE INDEX miners_workspace ON miners(workspace_id);
+        CREATE TRIGGER miners_workspace_insert BEFORE INSERT ON miners
+          WHEN NOT EXISTS (SELECT 1 FROM workspaces WHERE id = NEW.workspace_id)
+          BEGIN SELECT RAISE(ABORT, 'Unknown workspace'); END;
+        CREATE TRIGGER miners_workspace_update BEFORE UPDATE OF workspace_id ON miners
+          WHEN NOT EXISTS (SELECT 1 FROM workspaces WHERE id = NEW.workspace_id)
+          BEGIN SELECT RAISE(ABORT, 'Unknown workspace'); END;
+        CREATE TRIGGER workspaces_delete_used BEFORE DELETE ON workspaces
+          WHEN EXISTS (SELECT 1 FROM miners WHERE workspace_id = OLD.id)
+          BEGIN SELECT RAISE(ABORT, 'Workspace contains miners'); END;
+        INSERT INTO schema_migrations(version) VALUES (7);
+      `);
+    }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 8")
+        .get()
+    ) {
+      sqlite.exec(`ALTER TABLE workspaces ADD COLUMN poll_interval_seconds INTEGER CHECK(poll_interval_seconds IS NULL OR poll_interval_seconds BETWEEN 10 AND 3600);
+        INSERT INTO schema_migrations(version) VALUES (8);`);
+    }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 9")
+        .get()
+    ) {
+      sqlite.exec(`ALTER TABLE workspaces ADD COLUMN temperature_unit TEXT NOT NULL DEFAULT 'C' CHECK(temperature_unit IN ('C', 'F'));
+        INSERT INTO schema_migrations(version) VALUES (9);`);
+    }
   })();
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }

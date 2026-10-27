@@ -2,9 +2,7 @@ import { resolve } from "node:path";
 import { openDatabase, type AppDatabase } from "./database.js";
 import { createApp } from "./app.js";
 import { isDemoDatabase } from "./demo.js";
-import { collectOnce } from "./collector.js";
-import { waitForNextCollection } from "./collection-schedule.js";
-import { getPollingInterval } from "./settings.js";
+import { runWorkspaceCollector } from "./workspace-scheduler.js";
 
 /** A real fleet is served independently of the sample database and demo API. */
 export function createFleetSession(options: {
@@ -55,32 +53,15 @@ export function createFleetSession(options: {
         await app.close();
         throw error;
       }
-      const worker = (async () => {
-        while (!abort.signal.aborted) {
-          try {
-            await collectOnce(store, {
-              timeoutMs: options.timeoutMs,
-              retentionDays: options.retentionDays,
-              signal: abort.signal,
-              fetcher: options.fetcher,
-            });
-          } catch (error) {
-            if (!abort.signal.aborted)
-              app.log.error(error, "Fleet collection cycle failed");
-          }
-          if (abort.signal.aborted) break;
-          try {
-            await waitForNextCollection(
-              () => getPollingInterval(store, options.pollSeconds),
-              abort.signal,
-            );
-          } catch (error) {
-            if (abort.signal.aborted) break;
-            app.log.error(error, "Fleet collection interval failed");
-            break;
-          }
-        }
-      })();
+      const worker = runWorkspaceCollector(store, {
+        pollSeconds: options.pollSeconds,
+        timeoutMs: options.timeoutMs,
+        retentionDays: options.retentionDays,
+        signal: abort.signal,
+        fetcher: options.fetcher,
+        onError: (error) =>
+          app.log.error(error, "Fleet collection cycle failed"),
+      });
       shutdown = async () => {
         abort.abort();
         await worker;

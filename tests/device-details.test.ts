@@ -312,3 +312,81 @@ test("version 5 migration preserves existing miners and readings and is idempote
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("device trend ranges preserve successful readings around failed polls in the same bucket", async () => {
+  const store = openDatabase(":memory:");
+  store.db.insert(miners).values(miner).run();
+  const now = Math.floor(Date.now() / 1000);
+  const first = normalizeTelemetry({ ...base, hashRate: 1000 }, now - 100);
+  const failure = {
+    ...normalizeTelemetry(base, now - 90),
+    online: false,
+    hashrateGhs: null,
+    powerWatts: null,
+    temperatureC: null,
+  };
+  const last = normalizeTelemetry({ ...base, hashRate: 2000 }, now - 80);
+  for (const sample of [first, failure, last])
+    saveObservation(store, miner.id, sample);
+  const app = await createApp(store, { webRoot: "/nonexistent" });
+  try {
+    for (const query of [
+      "hours=1",
+      "hours=24",
+      "hours=168",
+      "range=collection",
+    ]) {
+      const response = await app.inject(
+        `/api/miners/${miner.id}/trends?${query}`,
+      );
+      assert.equal(response.statusCode, 200);
+      const data = response.json();
+      const before = data.points.findIndex(
+        (point: { at: number; hash: number | null }) =>
+          point.at === first.observedAt && point.hash === 1,
+      );
+      const gap = data.points.findIndex(
+        (point: { at: number; hash: number | null }) =>
+          point.at === failure.observedAt && point.hash === null,
+      );
+      const after = data.points.findIndex(
+        (point: { at: number; hash: number | null }) =>
+          point.at === last.observedAt && point.hash === 2,
+      );
+      assert.ok(before >= 0 && before < gap && gap < after, query);
+      if (query === "range=collection") assert.equal(data.windowSeconds, 750);
+    }
+    assert.equal(
+      (
+        await app.inject(
+          `/api/miners/${miner.id}/trends?hours=24&range=collection`,
+        )
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (await app.inject(`/api/miners/${miner.id}/trends?workspaceId=missing`))
+        .statusCode,
+      404,
+    );
+  } finally {
+    await app.close();
+    store.sqlite.close();
+  }
+});
+
+test("temperature warnings display in the selected workspace unit", async () => {
+  const { formatTemperatureWarning } =
+    await import("../shared/temperature-warning.js");
+  const hot = "High chip temperature: 74.0 °C (warning at 70 °C).";
+  assert.equal(formatTemperatureWarning(hot, "C"), hot);
+  assert.equal(
+    formatTemperatureWarning(hot, "F"),
+    "High chip temperature: 165.2 °F (warning at 158 °F).",
+  );
+  assert.equal(
+    formatTemperatureWarning("Miner reports zero hashrate.", "F"),
+    "Miner reports zero hashrate.",
+  );
+  assert.equal(formatTemperatureWarning("Timed out", "F"), "Timed out");
+});

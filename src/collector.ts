@@ -16,11 +16,20 @@ export async function collectOnce(
     fetcher?: typeof fetch;
     signal?: AbortSignal;
     demoMode?: boolean;
+    workspaceIds?: string[];
   },
 ) {
   if (options.demoMode || isDemoDatabase(store))
     return { skipped: true, attempted: 0, online: 0, offline: 0 };
-  const devices = store.db.select().from(miners).all();
+  const devices = store.db
+    .select()
+    .from(miners)
+    .all()
+    .filter(
+      (device) =>
+        !options.workspaceIds ||
+        options.workspaceIds.includes(device.workspaceId),
+    );
   const now = Math.floor(Date.now() / 1000);
   const owner = randomUUID();
   store.sqlite.exec(

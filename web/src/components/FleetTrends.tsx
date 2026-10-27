@@ -1,3 +1,6 @@
+import { trendRanges, type TrendRange } from "./trendRanges";
+import { temperature, useTemperatureUnit } from "./temperature";
+import { useWorkspace } from "./Workspaces";
 import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -39,6 +42,8 @@ export function TrendChart({
   rows,
   series,
   hours,
+  windowSeconds,
+  generatedAt,
 }: {
   title: string;
   subtitle: string;
@@ -47,6 +52,8 @@ export function TrendChart({
   rows: ChartRow[];
   series: ChartSeries[];
   hours: number;
+  windowSeconds?: number;
+  generatedAt?: number;
 }) {
   const populated = rows.some((row) =>
     series.some((line) => row[line.key] != null),
@@ -54,9 +61,11 @@ export function TrendChart({
   const timeLabel = (at: number) =>
     new Date(at * 1000).toLocaleString(
       undefined,
-      hours > 24
-        ? { month: "short", day: "numeric" }
-        : { hour: "2-digit", minute: "2-digit" },
+      windowSeconds
+        ? { hour: "2-digit", minute: "2-digit", second: "2-digit" }
+        : hours > 24
+          ? { month: "short", day: "numeric" }
+          : { hour: "2-digit", minute: "2-digit" },
     );
   return (
     <article className="trend-card">
@@ -73,7 +82,7 @@ export function TrendChart({
           <div
             className="trend-chart"
             role="img"
-            aria-label={`${title} for the last ${hours} hours. Gaps indicate unavailable observations.`}
+            aria-label={`${title} for the last ${windowSeconds ? `${windowSeconds} seconds` : `${hours} hours`}. Gaps indicate unavailable observations.`}
           >
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart
@@ -89,7 +98,11 @@ export function TrendChart({
                 <XAxis
                   dataKey="at"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={
+                    windowSeconds !== undefined && generatedAt !== undefined
+                      ? [generatedAt - windowSeconds, generatedAt]
+                      : ["dataMin", "dataMax"]
+                  }
                   tickFormatter={timeLabel}
                   tick={{ fill: "var(--text-muted, #8f9cb2)", fontSize: 10 }}
                   axisLine={false}
@@ -141,8 +154,22 @@ export function TrendChart({
                     name={line.name}
                     stroke={line.color}
                     strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4, strokeWidth: 2 }}
+                    dot={
+                      windowSeconds
+                        ? {
+                            r: 3,
+                            fill: line.color,
+                            stroke: line.color,
+                            strokeWidth: 0,
+                          }
+                        : false
+                    }
+                    activeDot={{
+                      r: 4,
+                      fill: line.color,
+                      stroke: line.color,
+                      strokeWidth: 2,
+                    }}
                     connectNulls={false}
                     isAnimationActive={false}
                   />
@@ -178,19 +205,35 @@ export function TrendChart({
     </article>
   );
 }
-export function FleetTrends() {
+export function FleetTrends({
+  pollIntervalSeconds,
+}: {
+  pollIntervalSeconds: number;
+}) {
+  const [temperatureUnit] = useTemperatureUnit();
+  const workspace = useWorkspace();
   const privacy = usePrivacy();
-  const [hours, setHours] = useState(24);
+  const [range, setRange] = useState<TrendRange>(24);
+  const live = range === "collection";
   const result = useQuery({
-    queryKey: ["fleet-trends", hours],
+    queryKey: [
+      "fleet-trends",
+      workspace.workspaceId,
+      range,
+      ...(live ? [pollIntervalSeconds] : []),
+    ],
     queryFn: async (): Promise<FleetTrendsResponse> => {
-      const response = await fetch(`/api/fleet/trends?hours=${hours}`);
+      const response = await fetch(
+        `/api/fleet/trends?workspaceId=${encodeURIComponent(workspace.workspaceId)}&${live ? "range=collection" : `hours=${range}`}`,
+      );
       if (!response.ok) throw new Error("Could not load recorded trends.");
       return response.json();
     },
-    refetchInterval: 60000,
+    refetchInterval: live ? 5000 : 60000,
   });
   const data = result.data;
+  const hours =
+    data?.hours ?? (live ? (pollIntervalSeconds * 25) / 3600 : Number(range));
   const fleetRows: ChartRow[] =
     data?.fleet.map((point) => ({ ...point })) ?? [];
   const temperatureRows: ChartRow[] =
@@ -198,7 +241,10 @@ export function FleetTrends() {
       Object.assign(
         { at: point.at },
         ...data.devices.map((device, i) => ({
-          [`device${i}`]: device.points[index]?.temperatureC ?? null,
+          [`device${i}`]: temperature(
+            device.points[index]?.temperatureC,
+            temperatureUnit,
+          ),
         })),
       ),
     ) ?? [];
@@ -215,17 +261,13 @@ export function FleetTrends() {
           role="group"
           aria-label="Trend time range"
         >
-          {[
-            [1, "1 hour"],
-            [24, "24 hours"],
-            [168, "7 days"],
-          ].map(([value, label]) => (
+          {trendRanges(pollIntervalSeconds).map(([value, label]) => (
             <button
               key={value}
               type="button"
-              aria-pressed={hours === value}
-              className={hours === value ? "selected" : ""}
-              onClick={() => setHours(Number(value))}
+              aria-pressed={range === value}
+              className={range === value ? "selected" : ""}
+              onClick={() => setRange(value)}
             >
               {label}
             </button>
@@ -263,11 +305,13 @@ export function FleetTrends() {
                 { key: "hashrateThs", name: "Fleet total", color: colors[0] },
               ]}
               hours={hours}
+              windowSeconds={data?.windowSeconds}
+              generatedAt={data?.generatedAt}
             />
             <TrendChart
               title="Miner temperatures"
               subtitle="Compare chip temperature by device"
-              unit="°C"
+              unit={`°${temperatureUnit}`}
               icon={<Thermometer size={17} />}
               rows={temperatureRows}
               series={data!.devices.map((device, i) => ({
@@ -281,6 +325,8 @@ export function FleetTrends() {
                 color: colors[i % colors.length],
               }))}
               hours={hours}
+              windowSeconds={data?.windowSeconds}
+              generatedAt={data?.generatedAt}
             />
             <TrendChart
               title="Power draw"
@@ -292,6 +338,8 @@ export function FleetTrends() {
                 { key: "powerWatts", name: "Fleet total", color: colors[1] },
               ]}
               hours={hours}
+              windowSeconds={data?.windowSeconds}
+              generatedAt={data?.generatedAt}
             />
             <TrendChart
               title="Fleet efficiency"
@@ -307,12 +355,16 @@ export function FleetTrends() {
                 },
               ]}
               hours={hours}
+              windowSeconds={data?.windowSeconds}
+              generatedAt={data?.generatedAt}
             />
           </div>
           <p className="trend-footnote">
-            {data!.bucketSeconds / 60}-minute averages · Gaps indicate missing
-            or offline readings. Fleet totals require readings from every
-            registered device.
+            {data!.windowSeconds
+              ? `${data!.fleet.length} collection intervals · ${data!.bucketSeconds} sec each · New readings appear on the right.`
+              : `${data!.bucketSeconds / 60}-minute averages.`}{" "}
+            Gaps indicate missing or offline readings. Fleet totals require
+            readings from every registered device.
           </p>
         </>
       )}

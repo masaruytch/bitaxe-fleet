@@ -31,7 +31,7 @@ Port 3080 is bound to loopback. This application has no login: keep access local
 
 ## Run with Node.js
 
-Use Node.js 24 (see `.nvmrc`); Node.js 22.12 or newer is also supported. Install dependencies from the committed lockfile:
+Use Node.js 24 (see `.nvmrc`); Node.js 22.22 or newer is also supported. Install dependencies from the committed lockfile:
 
 ```sh
 npm ci
@@ -72,14 +72,25 @@ Your created fleet defaults to port 3082 and `fleet.sqlite` beside the demo data
 
 For a custom isolated environment, set `DEMO_MODE=1`, `PORT`, `APP_ORIGIN`, and a separate `DATABASE_PATH` when starting the API. Use `FLEET_PORT` and `FLEET_DATABASE_PATH` to configure the created workspace. The fleet port must be free and reachable in your browser; a reverse proxy or container setup must also route/publish that port. No separate collector process is needed for either the demo or a fleet created through its wizard. Normal standalone installations still use the API and collector processes described above.
 
+## Workspaces
+
+Group miners by location, coin, or another label using the expandable **Workspaces** list in the desktop sidebar or iPhone menu. The list highlights the selected workspace. Use the settings icon beside the list heading to manage workspaces, including creating, renaming, and deleting an empty workspace. Move its miners first; the default workspace cannot be deleted. Deleting a workspace also removes its collection settings. Your current choice is remembered in this browser; separate tabs can stay on different workspaces.
+
+Each miner belongs to one workspace. New registrations use the selected workspace. To move an existing miner, open **Inspect → Workspace**, choose its destination, and select **Move miner**. Its identity, icon preferences, and collected history stay intact. Overview totals, device lists, and all trend ranges show only the selected workspace. Charts group historical readings by each miner's current workspace membership.
+
+Existing installations migrate all miners into **My mining fleet**, which you can rename. Workspaces and assignments are stored in SQLite. The collector continues monitoring every workspace when you switch groups or close the browser. Collection frequency can be set separately for each workspace in **Settings → Workspace settings**. Temperature units are saved per workspace. Retention remains shared across the installation; screenshot privacy remains a browser preference. Screenshot privacy also masks workspace names.
+
+Workspaces are organizational groups within one installation, not separate user accounts. The dashboard server still needs network access to every miner, including miners at other locations. IP and MAC duplicate detection applies across all workspaces.
+
 ## Manage your fleet
 
 - **Add miner:** enter its private IPv4 address, check the connection, optionally choose a friendly name, then confirm. Checking alone does not register it. Verification expires after two minutes. Duplicate IP and MAC addresses are detected.
+- **iPhone navigation:** use the hamburger menu to open Overview, Devices, Settings, screenshot privacy, and appearance controls. Compatibility is under About Bitaxe Fleet. The GitHub repository is linked in the menu, desktop sidebar, and page footer. Open **About Bitaxe Fleet → README** to read this documentation in the dashboard.
 - **Nicknames:** select the pencil beside a miner's name on Overview or Devices. Names are saved in the dashboard and chart legends; identity and history are preserved.
 - **Coin and icon:** select the icon beside a device name to manually label it BTC, BCH, DGB (SHA-256d), or leave it unassigned. Choose a preset icon independently, or upload a PNG/JPEG/WebP image up to 5 MB. Uploads are center-cropped to a 128 × 128 PNG and saved in SQLite; reset restores the coin icon. These dashboard labels do not change mining configuration or detect the coin.
-- **Settings:** use the top-bar dialog to change the collection interval. The default is 30 seconds, with a range of 10–3,600 seconds. The running collector applies saved changes without a restart.
-- **Inspect:** view hashrate, chip temperature, and power charts over 1, 6, or 24 hours, best difficulty since boot, uptime at the latest observation, Stratum host/port/user, and firmware. Open the miner's own AxeOS interface for controls.
-  Use **Settings → Temperature** to choose °C or °F for Inspect readings and charts. The choice applies immediately and is saved automatically in this browser.
+- **Settings:** use the top-bar dialog to rename the selected workspace and change its collection interval. The initial interval is 30 seconds unless configured otherwise, with a range of 10–3,600 seconds. Existing installations retain their previous interval; new workspaces inherit that installation default until changed. The running collector applies saved changes without a restart.
+- **Inspect:** view hashrate, chip temperature, and power charts over the collection interval, 1 hour, 24 hours, or 7 days, with longer windows averaging uninterrupted readings while retaining gaps; plus best difficulty since boot, uptime at the latest observation, Stratum host/port/user, and firmware. Open the miner's own AxeOS interface for controls.
+  Use **Settings → Temperature** to choose °C or °F for the selected workspace. Save settings to apply the choice to readings and charts across browsers. Existing workspaces initially use °C.
 - **Pool accuracy:** host, port, and worker follow AxeOS's reported primary/fallback selection. If the firmware does not report selection, configured primary details are labelled unconfirmed. Older stored readings have no port/user or confirmed selection until fresh data arrives. Pool passwords are never collected.
 - **Screenshot privacy:** use the eye icon beside a sensitive value to hide/reveal it consistently across views. The top-bar Screenshot privacy toggle hides miner names, IPs, Stratum hosts/ports, worker or wallet strings, connection details, and custom images together; chart legends/tooltips use anonymous miner labels. Global mode locks individual reveal buttons until switched off and remembers your previous field choices. Preferences stay in this browser, including after reload. This masks the display for screenshots; stored data and API responses remain unchanged.
 - **Status explanations:** warning, offline, stale, and awaiting-data badges include a visible reason. High temperature (70°C or higher) and zero hashrate can both be reported together.
@@ -104,9 +115,11 @@ Use the sun/moon toggle in the top navigation bar to switch between dark and lig
 
 ## Collection and history
 
-The collector reads each miner's `/api/system/info`, with at most four concurrent requests and a five-second default timeout. It waits the configured interval after each completed cycle, checks saved interval changes every second while waiting, and reloads the device inventory on each cycle. A database lease prevents overlapping collection runs.
+Fleet trends include a live view labelled with the collection interval in Settings (30 sec by default), alongside 1 hour, 24 hours, and 7 days. The live view covers 25 collection intervals (12½ minutes at 30 seconds), with the newest interval at the right edge and older data moving left. It refreshes stored chart data every 5 seconds and uses second-level time labels and visible point markers. Unavailable history stays empty instead of being filled with invented readings. Changing the collection interval updates the label and window automatically; selecting it does not trigger extra miner polls.
 
-The browser reads stored fleet data every 15 seconds and chart data every 60 seconds. Refreshing the page does not poll the miners. Collection continues with the browser closed while the collector process is running.
+The collector reads each miner's `/api/system/info`, with at most four concurrent requests and a five-second default timeout. It schedules each workspace independently, waits its configured interval after a completed cycle, checks changes every second, and reloads the device inventory on each cycle. A database lease prevents overlapping collection runs. A busy collector can delay a due workspace until the current cycle completes.
+
+The browser reads stored fleet data every 15 seconds and historical chart data every 60 seconds. The collection-interval chart range refreshes every 5 seconds. Refreshing the page does not poll the miners. Collection continues with the browser closed while the collector process is running.
 
 Failed polls are stored separately from successful readings. Data becomes stale after three collection intervals, with a minimum of 180 seconds. Missing measurements stay null, with gaps in charts rather than fabricated zeroes. Temperatures of 70°C or higher and zero hashrate produce warnings.
 
@@ -126,11 +139,11 @@ History retention defaults to **24 hours**. The 7-day chart window can be used i
 | `RETENTION_DAYS`        | `1`                                            | History retention, applied by the collector.                                            |
 | `APP_ORIGIN`            | `http://127.0.0.1:3080`                        | Browser origin allowed to update dashboard inventory and settings.                      |
 
-Saved collection settings override the environment default. The collector needs LAN access to miner addresses; a cloud server generally cannot reach miners on a home network without additional networking.
+Workspace collection settings override the saved installation default, which in turn overrides the environment default. The collector needs LAN access to miner addresses; a cloud server generally cannot reach miners on a home network without additional networking.
 
 ## Storage, backup, and upgrade
 
-SQLite stores registered devices, nicknames, coin labels, custom icons, settings, and observations. Keep it on local storage; WAL mode requires local filesystem semantics. Never commit databases, WAL/SHM files, backups, `.env`, or real fleet configuration. Ignore rules cover these files.
+SQLite stores workspaces, device assignments, registered devices, nicknames, coin labels, custom icons, settings, and observations. Keep it on local storage; WAL mode requires local filesystem semantics. Never commit databases, WAL/SHM files, backups, `.env`, or real fleet configuration. Ignore rules cover these files.
 
 Use SQLite's online backup API for a running installation. For an offline file copy, stop both API and collector first and preserve any WAL/SHM files alongside the database. Store backups outside the repository and test restoration before depending on them.
 
@@ -150,20 +163,28 @@ CI runs formatting, type checks, tests, and builds on Node.js 22 and 24, plus a 
 
 ## HTTP API
 
-| Method | Path                               | Purpose                                                                |
-| ------ | ---------------------------------- | ---------------------------------------------------------------------- |
-| GET    | `/healthz`                         | Process liveness.                                                      |
-| GET    | `/readyz`                          | Database availability.                                                 |
-| GET    | `/api/fleet`                       | Devices, latest readings, health, and collection interval.             |
-| GET    | `/api/miners/:id/history?hours=24` | Device history, capped at 10,000 observations and 168 requested hours. |
-| GET    | `/api/fleet/trends?hours=24`       | Chart data for 1, 24, or 168 hours.                                    |
-| POST   | `/api/fleet/create`                | Create or reopen a separate real fleet from the demo wizard.           |
-| POST   | `/api/miners/probe`                | Verify an address and obtain a short-lived registration token.         |
-| POST   | `/api/miners`                      | Register a verified miner with an optional friendly name.              |
-| PATCH  | `/api/miners/:id`                  | Update a dashboard nickname.                                           |
-| PATCH  | `/api/miners/:id/appearance`       | Save manual coin and preset/custom icon preferences.                   |
-| GET    | `/api/settings`                    | Read the collection interval.                                          |
-| PATCH  | `/api/settings`                    | Save an integer collection interval from 10 to 3,600 seconds.          |
+| Method | Path                               | Purpose                                                                                        |
+| ------ | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| GET    | `/healthz`                         | Process liveness.                                                                              |
+| GET    | `/readyz`                          | Database availability.                                                                         |
+| GET    | `/api/fleet`                       | Devices, latest readings, health, and collection interval.                                     |
+| GET    | `/api/miners/:id/history?hours=24` | Device history, capped at 10,000 observations and 168 requested hours.                         |
+| GET    | `/api/miners/:id/trends?hours=24`  | Device charts with gaps preserved; use `range=collection` for the live window.                 |
+| GET    | `/api/fleet/trends?hours=24`       | Chart data for 1, 24, or 168 hours; use `?range=collection` for the saved collection interval. |
+| POST   | `/api/fleet/create`                | Create or reopen a separate real fleet from the demo wizard.                                   |
+| POST   | `/api/miners/probe`                | Verify an address and obtain a short-lived registration token.                                 |
+| POST   | `/api/miners`                      | Register a verified miner with an optional friendly name.                                      |
+| PATCH  | `/api/miners/:id`                  | Update a dashboard nickname.                                                                   |
+| PATCH  | `/api/miners/:id/appearance`       | Save manual coin and preset/custom icon preferences.                                           |
+| GET    | `/api/workspaces`                  | List workspaces and miner counts.                                                              |
+| POST   | `/api/workspaces`                  | Create a named workspace.                                                                      |
+| PATCH  | `/api/workspaces/:id`              | Rename a workspace.                                                                            |
+| DELETE | `/api/workspaces/:id`              | Delete an empty, non-default workspace.                                                        |
+| PATCH  | `/api/miners/:id/workspace`        | Move a miner without replacing identity or history.                                            |
+| GET    | `/api/settings?workspaceId=…`      | Read the selected workspace collection interval (default workspace when omitted).              |
+| PATCH  | `/api/settings?workspaceId=…`      | Save the workspace collection interval and optionally rename it atomically.                    |
+
+Fleet, trend, and miner-history reads accept `workspaceId`; omitting it selects the default workspace. Miner registration accepts `workspaceId` in its confirmation body. Workspace management uses the same origin/request-header protection as other dashboard writes and is disabled in demo mode.
 
 There are no endpoints for changing miner hardware settings.
 

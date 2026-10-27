@@ -1,3 +1,4 @@
+import { requireWorkspace } from "./workspaces.js";
 import { identifyCompatibility } from "../shared/compatibility.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { isIP } from "node:net";
@@ -125,7 +126,12 @@ export function createMinerRegistration(
   function existing(ip: string, mac: string) {
     return (
       store.db
-        .select({ id: miners.id, name: miners.name, ip: miners.ip })
+        .select({
+          id: miners.id,
+          name: miners.name,
+          ip: miners.ip,
+          workspaceId: miners.workspaceId,
+        })
         .from(miners)
         .where(or(eq(miners.ip, ip), eq(miners.macAddress, mac)))
         .get() ?? null
@@ -181,10 +187,16 @@ export function createMinerRegistration(
         macAddress: identity.macAddress,
         firmware: observation.firmware,
         observation,
-        existingDevice: duplicate,
+        existingDevice: duplicate
+          ? {
+              ...duplicate,
+              workspaceName: requireWorkspace(store, duplicate.workspaceId)
+                .name,
+            }
+          : null,
       };
     },
-    add(token: string, name?: string) {
+    add(token: string, name?: string, workspaceId = "default") {
       const info = verified.get(token);
       if (!info || info.expiresAt <= now()) {
         verified.delete(token);
@@ -202,6 +214,7 @@ export function createMinerRegistration(
       const id = `miner-${randomUUID()}`;
       store.sqlite
         .transaction(() => {
+          requireWorkspace(store, workspaceId);
           const duplicate = existing(info.ip, info.macAddress);
           if (duplicate)
             throw registrationError(
@@ -213,6 +226,7 @@ export function createMinerRegistration(
             .values({
               id,
               name: displayName,
+              workspaceId,
               ip: info.ip,
               algorithm: "sha256",
               registeredAt: now(),
@@ -225,7 +239,7 @@ export function createMinerRegistration(
         })
         .immediate();
       verified.delete(token);
-      return { id, name: displayName, ip: info.ip };
+      return { id, name: displayName, ip: info.ip, workspaceId };
     },
   };
 }

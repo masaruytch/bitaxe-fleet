@@ -1,3 +1,4 @@
+import { WorkspaceProvider } from "./components/Workspaces";
 import { PrivacyProvider } from "./components/Privacy";
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -15,7 +16,9 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={client}>
       <BrowserRouter>
         <PrivacyProvider>
-          <App />
+          <WorkspaceProvider>
+            <App />
+          </WorkspaceProvider>
         </PrivacyProvider>
       </BrowserRouter>
     </QueryClientProvider>

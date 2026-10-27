@@ -1,3 +1,16 @@
+import { formatTemperatureWarning } from "../../shared/temperature-warning";
+import {
+  useWorkspace,
+  WorkspaceSwitcher,
+  MoveMiner,
+  workspaceField,
+} from "./components/Workspaces";
+import {
+  MainNavigation,
+  MobileNavigation,
+  RepositoryLink,
+  repositoryUrl,
+} from "./components/Navigation";
 import {
   SensitiveValue,
   PrivateConnectionDetails,
@@ -20,7 +33,7 @@ import {
   Cpu,
   Database,
   Gauge,
-  LayoutDashboard,
+  CodeXml,
   RefreshCw,
   Search,
   Server,
@@ -32,14 +45,21 @@ import {
 import type {
   Device,
   FleetResponse,
-  HistoryResponse,
+  DeviceTrendsResponse,
 } from "../../shared/contracts";
 import { NicknameDialog, SettingsDialog } from "./components/FleetPreferences";
 import { CreateFleetWizard } from "./components/CreateFleetWizard";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { trendRanges, type TrendRange } from "./components/trendRanges";
 import { CompatibilityPage } from "./components/Compatibility";
+
 import { AddMinerDialog } from "./components/AddMinerDialog";
 import { Button } from "./components/ui/button";
+const ReadmePage = lazy(() =>
+  import("./components/Readme").then((module) => ({
+    default: module.ReadmePage,
+  })),
+);
 const FleetTrends = lazy(() =>
   import("./components/FleetTrends").then((module) => ({
     default: module.FleetTrends,
@@ -70,12 +90,18 @@ async function request<T>(path: string): Promise<T> {
     );
   return result.json() as Promise<T>;
 }
-const useFleet = () =>
-  useQuery({
-    queryKey: ["fleet"],
-    queryFn: () => request<FleetResponse>("/api/fleet"),
+const useFleet = () => {
+  const workspace = useWorkspace();
+  return useQuery({
+    queryKey: ["fleet", workspace.workspaceId],
+    queryFn: () =>
+      request<FleetResponse>(
+        `/api/fleet?workspaceId=${encodeURIComponent(workspace.workspaceId)}`,
+      ),
+    enabled: !workspace.loading && !workspace.error,
     refetchInterval: 15000,
   });
+};
 const number = (value: number | null | undefined, digits = 0) =>
   value == null
     ? "—"
@@ -91,13 +117,20 @@ const stateLabel = {
 };
 function StateBadge({ device }: { device: Device }) {
   const privacy = usePrivacy();
+  const [temperatureUnit] = useTemperatureUnit();
   return (
     <span
       className={`state state-${device.state}`}
       title={
         !device.latest?.online && privacy.anyHidden
           ? "Connection details hidden"
-          : device.warningReasons?.join(" ")
+          : device.warningReasons
+              ?.map((reason) =>
+                device.latest?.online
+                  ? formatTemperatureWarning(reason, temperatureUnit)
+                  : reason,
+              )
+              .join(" ")
       }
     >
       <span />
@@ -131,12 +164,16 @@ function ErrorState({
 function DeviceDialog({
   device,
   demo = false,
+  pollIntervalSeconds,
 }: {
   device: Device;
   demo?: boolean;
+  pollIntervalSeconds: number;
 }) {
+  const workspace = useWorkspace();
   const [open, setOpen] = useState(false);
-  const [hours, setHours] = useState(24);
+  const [range, setRange] = useState<TrendRange>(24);
+  const live = range === "collection";
   const [temperatureUnit] = useTemperatureUnit();
   const privacy = usePrivacy();
   const displayName = privacy.text(
@@ -145,16 +182,22 @@ function DeviceDialog({
     "Hidden miner",
   );
   const history = useQuery({
-    queryKey: ["history", device.id],
+    queryKey: [
+      "device-trends",
+      workspace.workspaceId,
+      device.id,
+      range,
+      ...(live ? [pollIntervalSeconds] : []),
+    ],
     queryFn: () =>
-      request<HistoryResponse>(
-        `/api/miners/${encodeURIComponent(device.id)}/history?hours=24`,
+      request<DeviceTrendsResponse>(
+        `/api/miners/${encodeURIComponent(device.id)}/trends?workspaceId=${encodeURIComponent(workspace.workspaceId)}&${live ? "range=collection" : `hours=${range}`}`,
       ),
     enabled: open,
-    refetchInterval: open ? 15000 : false,
+    refetchInterval: open ? (live ? 5000 : 60000) : false,
   });
   const latest = device.latest;
-  const points = history.data?.observations ?? [];
+  const points = history.data?.points;
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
@@ -201,7 +244,7 @@ function DeviceDialog({
               {device.warningReasons.map((reason) => (
                 <li key={reason}>
                   {device.latest?.online ? (
-                    reason
+                    formatTemperatureWarning(reason, temperatureUnit)
                   ) : (
                     <PrivateConnectionDetails id={device.id} value={reason} />
                   )}
@@ -242,17 +285,21 @@ function DeviceDialog({
           </div>
           <div className="history-heading">
             <h3>Device history</h3>
-            <div role="group" aria-label="History time range">
-              {[1, 6, 24].map((range) => (
-                <Button
-                  key={range}
-                  size="sm"
-                  variant={hours === range ? "default" : "ghost"}
-                  aria-pressed={hours === range}
-                  onClick={() => setHours(range)}
+            <div
+              className="trend-ranges"
+              role="group"
+              aria-label="History time range"
+            >
+              {trendRanges(pollIntervalSeconds).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={range === value}
+                  className={range === value ? "selected" : ""}
+                  onClick={() => setRange(value)}
                 >
-                  {range}h
-                </Button>
+                  {label}
+                </button>
               ))}
             </div>
           </div>
@@ -265,35 +312,29 @@ function DeviceDialog({
                 void history.refetch();
               }}
             />
-          ) : points.length ? (
+          ) : points ? (
             <>
               <Suspense fallback={<p role="status">Loading charts…</p>}>
                 <DeviceHistory
-                  samples={points}
-                  hours={hours}
+                  points={points}
+                  hours={history.data.hours}
+                  windowSeconds={history.data.windowSeconds}
+                  generatedAt={history.data.generatedAt}
                   temperatureUnit={temperatureUnit}
                 />
               </Suspense>
               <p className="muted">
-                {
-                  points.filter(
-                    (p) => p.observedAt >= Date.now() / 1000 - hours * 3600,
-                  ).length
-                }{" "}
-                observations ·{" "}
-                {
-                  points.filter(
-                    (p) =>
-                      !p.online &&
-                      p.observedAt >= Date.now() / 1000 - hours * 3600,
-                  ).length
-                }{" "}
-                failed polls · gaps indicate unavailable readings.
+                {history.data.bucketSeconds
+                  ? `Averages within ${history.data.bucketSeconds / 60}-minute intervals`
+                  : "Individual readings"}{" "}
+                · Gaps indicate unavailable readings.
+                {history.data.truncated &&
+                  " Older readings omitted because the history limit was reached."}
               </p>
             </>
           ) : (
             <div className="empty compact">
-              No observations in the last 24 hours.
+              This miner is not in the selected workspace.
             </div>
           )}
           <dl className="detail-list">
@@ -355,6 +396,9 @@ function DeviceDialog({
               </dd>
             </div>
           </dl>
+          {!demo && (
+            <MoveMiner device={device} onMoved={() => setOpen(false)} />
+          )}
           {!demo && !privacy.isHidden(deviceField(device.id, "ip")) && (
             <a
               className="axeos-link"
@@ -375,6 +419,8 @@ function DeviceDialog({
   );
 }
 function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
+  const [temperatureUnit] = useTemperatureUnit();
+  const workspace = useWorkspace();
   const fleet = useFleet();
   const privacy = usePrivacy();
   const [search, setSearch] = useState("");
@@ -423,8 +469,14 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
       <header className="page-header">
         <div>
           <div className="breadcrumb">
-            Workspace <ChevronRight size={12} />{" "}
-            {devicesOnly ? "Devices" : "Overview"}
+            <span className="workspace-breadcrumb">
+              {privacy.text(
+                workspaceField(workspace.workspaceId),
+                workspace.active?.name ?? "Workspace",
+                "Workspace",
+              )}
+            </span>{" "}
+            <ChevronRight size={12} /> {devicesOnly ? "Devices" : "Overview"}
           </div>
           <h1>{devicesOnly ? "Your devices" : "Fleet overview"}</h1>
           <p>Your mining operation, at a glance.</p>
@@ -445,7 +497,9 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
           </Button>
           {demo ? (
             fleet.data!.canCreateFleet && <CreateFleetWizard demo />
-          ) : devices.length ? (
+          ) : devices.length ||
+            workspace.workspaceId !== "default" ||
+            workspace.workspaces.some((item) => item.minerCount > 0) ? (
             <AddMinerDialog />
           ) : (
             <CreateFleetWizard />
@@ -526,7 +580,7 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
             </p>
           }
         >
-          <FleetTrends />
+          <FleetTrends pollIntervalSeconds={fleet.data!.pollIntervalSeconds} />
         </Suspense>
       )}
       <section className="device-panel">
@@ -581,10 +635,10 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
         {!devices.length ? (
           <div className="empty">
             <Database size={28} />
-            <h2>No miners added yet</h2>
+            <h2>No miners in this workspace</h2>
             <p>
-              Use Create your fleet to connect your first device and start
-              collecting its history.
+              Add a miner here, or move an existing miner into this workspace
+              from Inspect.
             </p>
           </div>
         ) : !filtered.length ? (
@@ -662,7 +716,14 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                       {!!device.warningReasons?.length && (
                         <small className="status-reason">
                           {device.latest?.online ? (
-                            device.warningReasons.join(" ")
+                            device.warningReasons
+                              .map((reason) =>
+                                formatTemperatureWarning(
+                                  reason,
+                                  temperatureUnit,
+                                ),
+                              )
+                              .join(" ")
                           ) : (
                             <PrivateConnectionDetails
                               id={device.id}
@@ -693,8 +754,14 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                           (device.latest?.temperatureC ?? 0) >= 70 ? "hot" : ""
                         }
                       >
-                        {number(device.latest?.temperatureC, 1)}
-                        <small> °C</small>
+                        {number(
+                          temperature(
+                            device.latest?.temperatureC,
+                            temperatureUnit,
+                          ),
+                          1,
+                        )}
+                        <small> °{temperatureUnit}</small>
                       </span>
                     </td>
                     <td
@@ -718,7 +785,11 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                       </small>
                     </td>
                     <td>
-                      <DeviceDialog device={device} demo={demo} />
+                      <DeviceDialog
+                        device={device}
+                        demo={demo}
+                        pollIntervalSeconds={fleet.data!.pollIntervalSeconds}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -766,7 +837,17 @@ function Metric({
   );
 }
 export function App() {
+  const workspace = useWorkspace();
   const fleet = useFleet();
+  if (workspace.loading)
+    return (
+      <div className="empty" role="status">
+        <RefreshCw className="spinning" />
+        <h2>Loading workspaces…</h2>
+      </div>
+    );
+  if (workspace.error)
+    return <ErrorState message={workspace.error} retry={workspace.retry} />;
   return (
     <div className="app">
       <a href="#main" className="skip">
@@ -781,30 +862,13 @@ export function App() {
             Bitaxe Fleet<span>OPERATIONS WORKSPACE</span>
           </div>
         </div>
-        <div className="workspace">
-          <span className="workspace-avatar">M</span>
-          <div>
-            My mining fleet<span>AxeOS devices</span>
-          </div>
-          <span className="workspace-dot" />
-        </div>
-        <span className="nav-label">WORKSPACE</span>
-        <nav aria-label="Main navigation">
-          <NavLink to="/" end>
-            <LayoutDashboard size={17} />
-            Overview
-          </NavLink>
-          <NavLink to="/devices">
-            <Server size={17} />
-            Devices
-          </NavLink>
-          <NavLink to="/compatibility">
-            <ShieldCheck size={17} />
-            Compatibility
-          </NavLink>
-        </nav>
+        <WorkspaceSwitcher />
+
+        <MainNavigation />
+        <RepositoryLink />
       </aside>
       <div className="main-shell">
+        <MobileNavigation demo={fleet.data?.demo === true} />
         <div className="topbar">
           <span>
             <span className="environment-dot" />
@@ -813,9 +877,6 @@ export function App() {
           <span className="topbar-right">
             <PrivacyToggle />
             <ThemeToggle />
-            <span className="miner-access">
-              <ShieldCheck size={14} /> Read-only miner access
-            </span>
             {!fleet.data?.demo && <SettingsDialog />}
           </span>
         </div>
@@ -829,9 +890,23 @@ export function App() {
               />
             )}
           <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/devices" element={<Overview devicesOnly />} />
+            <Route
+              path="/"
+              element={<Overview key={workspace.workspaceId} />}
+            />
+            <Route
+              path="/devices"
+              element={<Overview key={workspace.workspaceId} devicesOnly />}
+            />
             <Route path="/compatibility" element={<CompatibilityPage />} />
+            <Route
+              path="/readme"
+              element={
+                <Suspense fallback={<p role="status">Loading README…</p>}>
+                  <ReadmePage />
+                </Suspense>
+              }
+            />
             <Route path="/system" element={<Navigate to="/" replace />} />
             <Route
               path="*"
@@ -844,7 +919,19 @@ export function App() {
             />
           </Routes>
           <footer>
-            Bitaxe Fleet <span>Built for a clear view of your operation.</span>
+            <span>
+              Bitaxe Fleet · Built for a clear view of your operation.
+            </span>
+            <a
+              className="footer-repository"
+              href={repositoryUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <CodeXml size={14} />
+              GitHub repository
+              <ArrowUpRight size={12} />
+            </a>
           </footer>
         </main>
       </div>

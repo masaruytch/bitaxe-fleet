@@ -1,4 +1,5 @@
-import { useTemperatureUnit } from "./temperature";
+import type { TemperatureUnit } from "./temperature";
+import { useWorkspace, workspaceField } from "./Workspaces";
 import { SensitiveValue, usePrivacy, deviceField } from "./Privacy";
 import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -180,7 +181,15 @@ export function NicknameDialog({ device }: { device: Device }) {
   );
 }
 export function SettingsDialog() {
-  const [temperatureUnit, setTemperatureUnit] = useTemperatureUnit();
+  const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>("C");
+  const [initialTemperatureUnit, setInitialTemperatureUnit] =
+    useState<TemperatureUnit>("C");
+  const workspace = useWorkspace();
+  const privacy = usePrivacy();
+  const [settingsWorkspaceId, setSettingsWorkspaceId] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [initialWorkspaceName, setInitialWorkspaceName] = useState("");
+  const [initialInterval, setInitialInterval] = useState("");
   const client = useQueryClient();
   const [open, setOpen] = useState(false),
     [interval, setInterval] = useState(""),
@@ -189,18 +198,27 @@ export function SettingsDialog() {
     [error, setError] = useState(""),
     [saved, setSaved] = useState(false);
   async function load() {
+    const id = workspace.workspaceId;
+    setSettingsWorkspaceId(id);
+    setWorkspaceName(workspace.active?.name ?? "");
+    setInitialWorkspaceName(workspace.active?.name ?? "");
+    setTemperatureUnit(workspace.active?.temperatureUnit ?? "C");
+    setInitialTemperatureUnit(workspace.active?.temperatureUnit ?? "C");
     setLoading(true);
     setInterval("");
     setError("");
     setSaved(false);
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch(
+        `/api/settings?workspaceId=${encodeURIComponent(id)}`,
+      );
       if (!response.ok)
         throw new Error(
           "Could not load settings. Close and reopen to try again.",
         );
       const data = (await response.json()) as DashboardSettings;
       setInterval(String(data.pollIntervalSeconds));
+      setInitialInterval(String(data.pollIntervalSeconds));
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not load settings.",
@@ -216,9 +234,34 @@ export function SettingsDialog() {
     setError("");
     setSaved(false);
     try {
-      await patch<DashboardSettings>("/api/settings", {
-        pollIntervalSeconds: Number(interval),
-      });
+      const renamed = workspaceName.trim() !== initialWorkspaceName;
+      if (
+        !renamed &&
+        interval === initialInterval &&
+        temperatureUnit === initialTemperatureUnit
+      ) {
+        setSaved(true);
+        return;
+      }
+      const result = await patch<DashboardSettings>(
+        `/api/settings?workspaceId=${encodeURIComponent(settingsWorkspaceId)}`,
+        {
+          ...(interval !== initialInterval
+            ? { pollIntervalSeconds: Number(interval) }
+            : {}),
+          ...(temperatureUnit !== initialTemperatureUnit
+            ? { temperatureUnit }
+            : {}),
+          ...(renamed
+            ? { name: workspaceName.trim(), expectedName: initialWorkspaceName }
+            : {}),
+        },
+      );
+      setInterval(String(result.pollIntervalSeconds));
+      setInitialInterval(String(result.pollIntervalSeconds));
+      if (renamed) setInitialWorkspaceName(workspaceName.trim());
+      setInitialTemperatureUnit(temperatureUnit);
+      await client.invalidateQueries({ queryKey: ["workspaces"] });
       await client.invalidateQueries({ queryKey: ["fleet"] });
       setSaved(true);
     } catch (error) {
@@ -232,7 +275,7 @@ export function SettingsDialog() {
   return (
     <PreferenceDialog
       title="Settings"
-      description="Choose your temperature display and how often the dashboard collects readings."
+      description="Manage settings for the selected workspace."
       trigger={
         <Button variant="ghost" size="sm" className="settings-trigger">
           <Settings size={15} />
@@ -251,7 +294,7 @@ export function SettingsDialog() {
         aria-labelledby="temperature-setting-label"
       >
         <div className="temperature-setting-row">
-          <h3 id="temperature-setting-label">Temperature</h3>
+          <h3 id="temperature-setting-label">Temperature · this workspace</h3>
           <div
             className="temperature-unit-toggle"
             role="group"
@@ -263,7 +306,10 @@ export function SettingsDialog() {
                 key={unit}
                 aria-label={`Show temperatures in ${unit === "C" ? "Celsius" : "Fahrenheit"}`}
                 aria-pressed={temperatureUnit === unit}
-                onClick={() => setTemperatureUnit(unit)}
+                onClick={() => {
+                  setTemperatureUnit(unit);
+                  setSaved(false);
+                }}
               >
                 °{unit}
               </button>
@@ -271,11 +317,40 @@ export function SettingsDialog() {
           </div>
         </div>
         <p>
-          Applies immediately to Inspect readings and charts. Saved
-          automatically in this browser.
+          Applies to temperature readings and charts in this workspace after
+          saving.
         </p>
       </section>
       <form className="add-miner-form" onSubmit={save}>
+        <h3>
+          Workspace settings:{" "}
+          {privacy.text(
+            workspaceField(settingsWorkspaceId),
+            workspace.workspaces.find((item) => item.id === settingsWorkspaceId)
+              ?.name ?? "Workspace",
+            "Hidden workspace",
+          )}
+        </h3>
+        <label htmlFor="workspace-settings-name">Workspace name</label>
+        <input
+          id="workspace-settings-name"
+          value={workspaceName}
+          onChange={(event) => {
+            setWorkspaceName(event.target.value);
+            setSaved(false);
+          }}
+          maxLength={64}
+          required
+          disabled={
+            pending ||
+            loading ||
+            privacy.isHidden(workspaceField(settingsWorkspaceId))
+          }
+          type={privacy.anyHidden ? "password" : "text"}
+        />
+        {privacy.isHidden(workspaceField(settingsWorkspaceId)) && (
+          <p>Reveal the workspace name to edit it.</p>
+        )}
         <label htmlFor="collection-interval">
           Collection interval (seconds)
         </label>
@@ -295,8 +370,8 @@ export function SettingsDialog() {
           aria-describedby="collection-help"
         />
         <p id="collection-help">
-          Default: 30 seconds. Choose between 10 and 3,600 seconds. Changes
-          apply automatically to the running collector.
+          Applies to this workspace. Choose between 10 and 3,600 seconds.
+          Changes apply automatically to the running collector.
         </p>
         <p>
           Collection continues while this dashboard is closed, as long as the
@@ -310,8 +385,7 @@ export function SettingsDialog() {
         )}
         {saved && (
           <p className="notice" role="status">
-            Settings saved. The collector will use this interval for its next
-            poll.
+            Workspace settings saved.
           </p>
         )}
         <div className="dialog-actions">
@@ -320,7 +394,10 @@ export function SettingsDialog() {
               Close
             </Button>
           </Dialog.Close>
-          <Button type="submit" disabled={pending || loading || !interval}>
+          <Button
+            type="submit"
+            disabled={pending || loading || !interval || !workspaceName.trim()}
+          >
             {pending ? "Saving…" : "Save settings"}
           </Button>
         </div>

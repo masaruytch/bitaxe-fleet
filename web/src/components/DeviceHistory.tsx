@@ -1,21 +1,25 @@
 import { temperature, type TemperatureUnit } from "./temperature";
 import { Activity, Thermometer, Zap } from "lucide-react";
-import type { Observation } from "../../../shared/contracts";
-import { deviceChartRows } from "../../../shared/device-history";
+import type { DeviceTrendsResponse } from "../../../shared/contracts";
 import { TrendChart } from "./FleetTrends";
 export function DeviceHistory({
-  samples,
+  points,
   hours,
+  windowSeconds,
+  generatedAt,
   temperatureUnit,
 }: {
-  samples: Observation[];
+  points: DeviceTrendsResponse["points"];
   hours: number;
+  windowSeconds?: number;
+  generatedAt: number;
   temperatureUnit: TemperatureUnit;
 }) {
-  const end = Math.floor(Date.now() / 1000);
-  const rows = deviceChartRows(samples, end - hours * 3600, end).map((row) => ({
-    ...row,
-    temp: temperature(row.temp, temperatureUnit),
+  const rows = points.map((point) => ({
+    at: point.at,
+    hash: point.hash,
+    temp: temperature(point.temp, temperatureUnit),
+    power: point.power,
   }));
   return (
     <div className="device-history">
@@ -45,7 +49,11 @@ export function DeviceHistory({
         <TrendChart
           key={metric.key}
           title={metric.title}
-          subtitle={`Last ${hours} hours`}
+          subtitle={
+            windowSeconds
+              ? "Recent collection intervals"
+              : `Last ${hours === 168 ? "7 days" : `${hours} ${hours === 1 ? "hour" : "hours"}`}`
+          }
           unit={metric.unit}
           icon={metric.icon}
           rows={rows}
@@ -53,6 +61,8 @@ export function DeviceHistory({
             { key: metric.key, name: metric.title, color: metric.color },
           ]}
           hours={hours}
+          windowSeconds={windowSeconds}
+          generatedAt={generatedAt}
         />
       ))}
     </div>

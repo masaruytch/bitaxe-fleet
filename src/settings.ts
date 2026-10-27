@@ -19,22 +19,32 @@ function validateInterval(seconds: number) {
 export function getPollingInterval(
   store: AppDatabase,
   fallback = DEFAULT_POLL_INTERVAL_SECONDS,
+  workspaceId = "default",
 ): number {
   const row = store.sqlite
     .prepare(
       "SELECT value FROM app_settings WHERE key = 'poll_interval_seconds'",
     )
     .get() as { value: number } | undefined;
-  const value = row?.value ?? fallback;
+  const workspace = store.sqlite
+    .prepare(
+      "SELECT poll_interval_seconds AS value FROM workspaces WHERE id = ?",
+    )
+    .get(workspaceId) as { value: number | null } | undefined;
+  if (!workspace) throw registrationError("Workspace not found", 404);
+  const value = workspace.value ?? row?.value ?? fallback;
   validateInterval(value);
   return value;
 }
-export function setPollingInterval(store: AppDatabase, seconds: number) {
+export function setPollingInterval(
+  store: AppDatabase,
+  seconds: number,
+  workspaceId = "default",
+) {
   validateInterval(seconds);
-  store.sqlite
-    .prepare(
-      "INSERT INTO app_settings(key,value) VALUES ('poll_interval_seconds',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-    )
-    .run(seconds);
+  const result = store.sqlite
+    .prepare("UPDATE workspaces SET poll_interval_seconds = ? WHERE id = ?")
+    .run(seconds, workspaceId);
+  if (!result.changes) throw registrationError("Workspace not found", 404);
   return { pollIntervalSeconds: seconds };
 }
