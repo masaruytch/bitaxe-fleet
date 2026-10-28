@@ -181,6 +181,9 @@ export function NicknameDialog({ device }: { device: Device }) {
   );
 }
 export function SettingsDialog() {
+  const [agentAccessEnabled, setAgentAccessEnabled] = useState(false);
+  const [initialAgentAccessEnabled, setInitialAgentAccessEnabled] =
+    useState(false);
   const [temperatureUnit, setTemperatureUnit] = useState<TemperatureUnit>("C");
   const [initialTemperatureUnit, setInitialTemperatureUnit] =
     useState<TemperatureUnit>("C");
@@ -219,6 +222,8 @@ export function SettingsDialog() {
       const data = (await response.json()) as DashboardSettings;
       setInterval(String(data.pollIntervalSeconds));
       setInitialInterval(String(data.pollIntervalSeconds));
+      setAgentAccessEnabled(data.agentAccessEnabled);
+      setInitialAgentAccessEnabled(data.agentAccessEnabled);
     } catch (error) {
       setError(
         error instanceof Error ? error.message : "Could not load settings.",
@@ -238,7 +243,8 @@ export function SettingsDialog() {
       if (
         !renamed &&
         interval === initialInterval &&
-        temperatureUnit === initialTemperatureUnit
+        temperatureUnit === initialTemperatureUnit &&
+        agentAccessEnabled === initialAgentAccessEnabled
       ) {
         setSaved(true);
         return;
@@ -252,6 +258,9 @@ export function SettingsDialog() {
           ...(temperatureUnit !== initialTemperatureUnit
             ? { temperatureUnit }
             : {}),
+          ...(agentAccessEnabled !== initialAgentAccessEnabled
+            ? { agentAccessEnabled }
+            : {}),
           ...(renamed
             ? { name: workspaceName.trim(), expectedName: initialWorkspaceName }
             : {}),
@@ -261,6 +270,8 @@ export function SettingsDialog() {
       setInitialInterval(String(result.pollIntervalSeconds));
       if (renamed) setInitialWorkspaceName(workspaceName.trim());
       setInitialTemperatureUnit(temperatureUnit);
+      setAgentAccessEnabled(result.agentAccessEnabled);
+      setInitialAgentAccessEnabled(result.agentAccessEnabled);
       await client.invalidateQueries({ queryKey: ["workspaces"] });
       await client.invalidateQueries({ queryKey: ["fleet"] });
       setSaved(true);
@@ -274,8 +285,19 @@ export function SettingsDialog() {
   }
   return (
     <PreferenceDialog
-      title="Settings"
-      description="Manage settings for the selected workspace."
+      title="Workspace settings"
+      description={
+        <>
+          Changes apply only to{" "}
+          {privacy.text(
+            workspaceField(settingsWorkspaceId),
+            workspace.workspaces.find((item) => item.id === settingsWorkspaceId)
+              ?.name ?? "this workspace",
+            "the hidden workspace",
+          )}
+          .
+        </>
+      }
       trigger={
         <Button variant="ghost" size="sm" className="settings-trigger">
           <Settings size={15} />
@@ -289,94 +311,139 @@ export function SettingsDialog() {
       open={open}
       onOpenChange={setOpen}
     >
-      <section
-        className="temperature-setting"
-        aria-labelledby="temperature-setting-label"
-      >
-        <div className="temperature-setting-row">
-          <h3 id="temperature-setting-label">Temperature · this workspace</h3>
-          <div
-            className="temperature-unit-toggle"
-            role="group"
-            aria-label="Temperature unit"
-          >
-            {(["C", "F"] as const).map((unit) => (
-              <button
-                type="button"
-                key={unit}
-                aria-label={`Show temperatures in ${unit === "C" ? "Celsius" : "Fahrenheit"}`}
-                aria-pressed={temperatureUnit === unit}
-                onClick={() => {
-                  setTemperatureUnit(unit);
-                  setSaved(false);
-                }}
-              >
-                °{unit}
-              </button>
-            ))}
+      <form className="add-miner-form workspace-settings-form" onSubmit={save}>
+        <section
+          className="workspace-settings-section"
+          aria-labelledby="workspace-general-title"
+        >
+          <div className="workspace-settings-section-heading">
+            <h3 id="workspace-general-title">General</h3>
+            <p>Identify this workspace in your dashboard.</p>
           </div>
-        </div>
-        <p>
-          Applies to temperature readings and charts in this workspace after
-          saving.
-        </p>
-      </section>
-      <form className="add-miner-form" onSubmit={save}>
-        <h3>
-          Workspace settings:{" "}
-          {privacy.text(
-            workspaceField(settingsWorkspaceId),
-            workspace.workspaces.find((item) => item.id === settingsWorkspaceId)
-              ?.name ?? "Workspace",
-            "Hidden workspace",
+          <label htmlFor="workspace-settings-name">Workspace name</label>
+          <input
+            id="workspace-settings-name"
+            value={workspaceName}
+            onChange={(event) => {
+              setWorkspaceName(event.target.value);
+              setSaved(false);
+            }}
+            maxLength={64}
+            required
+            disabled={
+              pending ||
+              loading ||
+              privacy.isHidden(workspaceField(settingsWorkspaceId))
+            }
+            type={
+              privacy.isHidden(workspaceField(settingsWorkspaceId))
+                ? "password"
+                : "text"
+            }
+            aria-describedby={
+              privacy.isHidden(workspaceField(settingsWorkspaceId))
+                ? "workspace-name-help"
+                : undefined
+            }
+          />
+          {privacy.isHidden(workspaceField(settingsWorkspaceId)) && (
+            <p className="workspace-settings-help" id="workspace-name-help">
+              Reveal the workspace name to edit it.
+            </p>
           )}
-        </h3>
-        <label htmlFor="workspace-settings-name">Workspace name</label>
-        <input
-          id="workspace-settings-name"
-          value={workspaceName}
-          onChange={(event) => {
-            setWorkspaceName(event.target.value);
-            setSaved(false);
-          }}
-          maxLength={64}
-          required
-          disabled={
-            pending ||
-            loading ||
-            privacy.isHidden(workspaceField(settingsWorkspaceId))
-          }
-          type={privacy.anyHidden ? "password" : "text"}
-        />
-        {privacy.isHidden(workspaceField(settingsWorkspaceId)) && (
-          <p>Reveal the workspace name to edit it.</p>
-        )}
-        <label htmlFor="collection-interval">
-          Collection interval (seconds)
-        </label>
-        <input
-          id="collection-interval"
-          type="number"
-          min={MIN_POLL_INTERVAL_SECONDS}
-          max={MAX_POLL_INTERVAL_SECONDS}
-          step="1"
-          value={interval}
-          onChange={(event) => {
-            setInterval(event.target.value);
-            setSaved(false);
-          }}
-          required
-          disabled={pending || loading}
-          aria-describedby="collection-help"
-        />
-        <p id="collection-help">
-          Applies to this workspace. Choose between 10 and 3,600 seconds.
-          Changes apply automatically to the running collector.
-        </p>
-        <p>
-          Collection continues while this dashboard is closed, as long as the
-          collector is running.
-        </p>
+        </section>
+        <section
+          className="workspace-settings-section"
+          aria-labelledby="workspace-monitoring-title"
+        >
+          <div className="workspace-settings-section-heading">
+            <h3 id="workspace-monitoring-title">Monitoring</h3>
+            <p>Choose how this workspace collects and displays readings.</p>
+          </div>
+          <label htmlFor="collection-interval">
+            Collection interval (seconds)
+          </label>
+          <input
+            id="collection-interval"
+            type="number"
+            min={MIN_POLL_INTERVAL_SECONDS}
+            max={MAX_POLL_INTERVAL_SECONDS}
+            step="1"
+            value={interval}
+            onChange={(event) => {
+              setInterval(event.target.value);
+              setSaved(false);
+            }}
+            required
+            disabled={pending || loading}
+            aria-describedby="collection-help"
+          />
+          <p className="workspace-settings-help" id="collection-help">
+            Choose 10–3,600 seconds. Changes apply to the running collector
+            after saving.
+          </p>
+          <div className="workspace-settings-temperature">
+            <div>
+              <span
+                className="workspace-settings-label"
+                id="temperature-setting-label"
+              >
+                Temperature unit
+              </span>
+              <p className="workspace-settings-help">
+                Used for readings and charts.
+              </p>
+            </div>
+            <div
+              className="temperature-unit-toggle"
+              role="group"
+              aria-labelledby="temperature-setting-label"
+            >
+              {(["C", "F"] as const).map((unit) => (
+                <button
+                  type="button"
+                  key={unit}
+                  aria-label={`Show temperatures in ${unit === "C" ? "Celsius" : "Fahrenheit"}`}
+                  aria-pressed={temperatureUnit === unit}
+                  disabled={pending || loading}
+                  onClick={() => {
+                    setTemperatureUnit(unit);
+                    setSaved(false);
+                  }}
+                >
+                  °{unit}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+        <section
+          className="workspace-settings-section"
+          aria-labelledby="agent-access-label"
+        >
+          <div className="workspace-settings-section-heading">
+            <h3 id="agent-access-label">Agent access</h3>
+            <p>Optionally share filtered readings with connected agents.</p>
+          </div>
+          <label className="agent-access-option">
+            <input
+              type="checkbox"
+              checked={agentAccessEnabled}
+              disabled={pending || loading}
+              aria-describedby="agent-access-help"
+              onChange={(event) => {
+                setAgentAccessEnabled(event.target.checked);
+                setSaved(false);
+              }}
+            />
+            Enable read-only agent access
+          </label>
+          <p className="workspace-settings-help" id="agent-access-help">
+            Agent setup is separate. Agents with direct API or database access
+            can bypass this setting; their providers may receive shared
+            readings.
+          </p>
+        </section>
         {loading && <p role="status">Loading settings…</p>}
         {error && (
           <div className="notice warning" role="alert">

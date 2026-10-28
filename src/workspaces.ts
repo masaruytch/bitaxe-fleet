@@ -84,6 +84,7 @@ export function updateWorkspaceSettings(
   rename?: { name: string; expectedName: string },
   temperatureUnit?: "C" | "F",
   fallback?: number,
+  agentAccessEnabled?: boolean,
 ) {
   return store.sqlite
     .transaction(() => {
@@ -104,7 +105,16 @@ export function updateWorkspaceSettings(
         store.sqlite
           .prepare("UPDATE workspaces SET temperature_unit = ? WHERE id = ?")
           .run(temperatureUnit, id);
-      return result;
+      if (agentAccessEnabled !== undefined)
+        store.sqlite
+          .prepare(
+            "UPDATE workspaces SET agent_access_enabled = ? WHERE id = ?",
+          )
+          .run(agentAccessEnabled ? 1 : 0, id);
+      return {
+        ...result,
+        agentAccessEnabled: agentAccessEnabled ?? current.agentAccessEnabled,
+      };
     })
     .immediate();
 }

@@ -338,7 +338,7 @@ test("version 7 migration keeps existing data in default workspace and persists 
       .run();
     saveObservation(store, "a", normalizeTelemetry(raw, 100));
     store.sqlite.exec(
-      "DROP TRIGGER miners_workspace_insert; DROP TRIGGER miners_workspace_update; DROP TRIGGER workspaces_delete_used; DROP INDEX miners_workspace; ALTER TABLE miners DROP COLUMN workspace_id; DROP TABLE workspaces; DELETE FROM schema_migrations WHERE version IN (7,8,9);",
+      "DROP TRIGGER miners_workspace_insert; DROP TRIGGER miners_workspace_update; DROP TRIGGER workspaces_delete_used; DROP INDEX miners_workspace; ALTER TABLE miners DROP COLUMN workspace_id; DROP TABLE workspaces; DELETE FROM schema_migrations WHERE version IN (7,8,9,10);",
     );
     store.sqlite.close();
     store = openDatabase(path);
@@ -781,5 +781,64 @@ test("partial workspace settings updates preserve a concurrently changed interva
   } finally {
     await app.close();
     store.sqlite.close();
+  }
+});
+
+test("agent access defaults off and is independently saved and revoked per workspace", async () => {
+  const store = openDatabase(":memory:");
+  const app = await createApp(store, { webRoot: "/nonexistent" });
+  try {
+    store.sqlite
+      .prepare("INSERT INTO workspaces(id,name) VALUES ('other','Other')")
+      .run();
+    const url = "/api/settings?workspaceId=other";
+    assert.equal((await app.inject(url)).json().agentAccessEnabled, false);
+    const patch = (payload: object) =>
+      app.inject({ method: "PATCH", url, headers, payload });
+    assert.equal(
+      (await patch({ agentAccessEnabled: "invalid" })).statusCode,
+      400,
+    );
+    assert.equal(
+      (await patch({ agentAccessEnabled: true })).json().agentAccessEnabled,
+      true,
+    );
+    assert.equal(
+      (await app.inject("/api/settings")).json().agentAccessEnabled,
+      false,
+    );
+    assert.equal(
+      (await patch({ pollIntervalSeconds: 90 })).json().agentAccessEnabled,
+      true,
+    );
+    assert.equal(
+      (await patch({ agentAccessEnabled: false })).json().agentAccessEnabled,
+      false,
+    );
+  } finally {
+    await app.close();
+    store.sqlite.close();
+  }
+});
+
+test("version 10 migration keeps existing workspace data and disables agent access", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fleet-agent-migration-"));
+  const path = join(directory, "test.sqlite");
+  let store = openDatabase(path);
+  try {
+    store.sqlite.exec(
+      "UPDATE workspaces SET poll_interval_seconds=75; ALTER TABLE workspaces DROP COLUMN agent_access_enabled; DELETE FROM schema_migrations WHERE version=10;",
+    );
+    store.sqlite.close();
+    store = openDatabase(path);
+    const row = store.sqlite
+      .prepare(
+        "SELECT agent_access_enabled AS enabled, poll_interval_seconds AS interval FROM workspaces WHERE id='default'",
+      )
+      .get();
+    assert.deepEqual(row, { enabled: 0, interval: 75 });
+  } finally {
+    store.sqlite.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });

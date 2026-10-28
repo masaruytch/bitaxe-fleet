@@ -107,11 +107,13 @@ export function SensitiveValue({
   value,
   label,
   hiddenText = "Hidden",
+  href,
 }: {
   fieldKey: string;
   value: string | number | null | undefined;
   label: string;
   hiddenText?: string;
+  href?: string;
 }) {
   const privacy = usePrivacy();
   if (value == null || value === "") return <>—</>;
@@ -119,11 +121,23 @@ export function SensitiveValue({
   const action = `${hidden ? "Reveal" : "Hide"} ${label}`;
   return (
     <span className="sensitive-value" data-private-field={label}>
-      <bdi
-        className={hidden ? "sensitive-text masked-value" : "sensitive-text"}
-      >
-        {hidden ? hiddenText : value}
-      </bdi>
+      {href && !hidden ? (
+        <a
+          className="sensitive-link"
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${label} in AxeOS (opens in a new tab)`}
+        >
+          <bdi className="sensitive-text">{value}</bdi>
+        </a>
+      ) : (
+        <bdi
+          className={hidden ? "sensitive-text masked-value" : "sensitive-text"}
+        >
+          {hidden ? hiddenText : value}
+        </bdi>
+      )}
       <button
         type="button"
         className="privacy-value-toggle"

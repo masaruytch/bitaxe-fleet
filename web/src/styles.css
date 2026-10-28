@@ -1600,6 +1600,19 @@ footer > span {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.sensitive-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sensitive-link:hover {
+  color: var(--text-accent, #a59afa);
+}
+.sensitive-link:focus-visible {
+  outline: 2px solid var(--text-accent, #a59afa);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .masked-value {
   color: var(--text-muted, #8997ad);
   font-style: italic;
@@ -1660,27 +1673,72 @@ footer > span {
   white-space: nowrap;
 }
 
-.temperature-setting {
-  margin-top: 24px;
+/* Workspace settings groups related controls without repeating the workspace name. */
+.workspace-settings-form {
+  margin-top: 20px;
 }
-.temperature-setting-row {
+.workspace-settings-section {
+  padding: 16px 0;
+  border-top: 1px solid var(--border-default, #394356);
+}
+.dialog-content .workspace-settings-section h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.workspace-settings-section-heading {
+  margin-bottom: 16px;
+}
+.workspace-settings-section-heading p,
+.workspace-settings-form .workspace-settings-help {
+  color: var(--text-muted, #8997ad);
+  font-size: 12px;
+  line-height: 1.55;
+  margin: 5px 0 0;
+}
+.workspace-settings-temperature {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
+  margin-top: 18px;
 }
-.temperature-setting-row h3 {
-  margin: 0;
-}
-.temperature-setting p {
-  color: var(--text-muted, #8997ad);
-  font-size: 11px;
-  line-height: 1.8;
-  margin: 8px 0 20px;
-}
-.temperature-setting .temperature-unit-toggle button {
-  padding: 6px 10px;
+.workspace-settings-label {
+  color: var(--text-primary, #d4dfef);
   font-size: 12px;
+}
+.workspace-settings-temperature .temperature-unit-toggle {
+  flex-shrink: 0;
+}
+.workspace-settings-temperature .temperature-unit-toggle button {
+  min-width: 42px;
+  min-height: 40px;
+  font-size: 13px;
+}
+.workspace-settings-temperature .temperature-unit-toggle button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+.add-miner-form .agent-access-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  margin: 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.add-miner-form .agent-access-option input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: var(--text-accent, #8066ee);
+}
+.workspace-settings-form .dialog-actions {
+  border-top: 1px solid var(--border-default, #394356);
+  padding-top: 18px;
+  margin: 4px 0 0;
 }
 
 /* Mobile navigation and project links. */

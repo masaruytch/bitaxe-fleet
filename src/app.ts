@@ -445,12 +445,14 @@ export async function createApp(
     "/api/settings",
     async (request, reply) => {
       reply.header("Cache-Control", "no-store");
+      const workspace = requireWorkspace(store, request.query.workspaceId);
       return {
         pollIntervalSeconds: getPollingInterval(
           store,
           options.pollSeconds,
-          requireWorkspace(store, request.query.workspaceId).id,
+          workspace.id,
         ),
+        agentAccessEnabled: workspace.agentAccessEnabled,
       };
     },
   );
@@ -461,6 +463,7 @@ export async function createApp(
       name?: string;
       expectedName?: string;
       temperatureUnit?: "C" | "F";
+      agentAccessEnabled?: boolean;
     };
   }>(
     "/api/settings",
@@ -475,12 +478,14 @@ export async function createApp(
             { required: ["pollIntervalSeconds"] },
             { required: ["name"] },
             { required: ["temperatureUnit"] },
+            { required: ["agentAccessEnabled"] },
           ],
           dependencies: { name: ["expectedName"], expectedName: ["name"] },
           properties: {
             name: { type: "string", minLength: 1, maxLength: 64 },
             expectedName: { type: "string", minLength: 1, maxLength: 64 },
             temperatureUnit: { type: "string", enum: ["C", "F"] },
+            agentAccessEnabled: { type: "boolean" },
             pollIntervalSeconds: {
               type: "integer",
               minimum: MIN_POLL_INTERVAL_SECONDS,
@@ -501,6 +506,7 @@ export async function createApp(
           : undefined,
         request.body.temperatureUnit,
         options.pollSeconds,
+        request.body.agentAccessEnabled,
       ),
   );
   app.patch<{ Params: { id: string }; Body: { name: string } }>(

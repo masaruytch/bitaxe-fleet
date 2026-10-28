@@ -10,6 +10,9 @@ export const workspaces = sqliteTable("workspaces", {
   name: text("name").notNull().unique(),
   pollIntervalSeconds: integer("poll_interval_seconds"),
   temperatureUnit: text("temperature_unit").notNull().default("C"),
+  agentAccessEnabled: integer("agent_access_enabled", { mode: "boolean" })
+    .notNull()
+    .default(false),
 });
 export const miners = sqliteTable("miners", {
   id: text("id").primaryKey(),

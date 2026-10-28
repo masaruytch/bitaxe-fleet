@@ -705,6 +705,11 @@ function Overview({ devicesOnly = false }: { devicesOnly?: boolean }) {
                               fieldKey={deviceField(device.id, "ip")}
                               value={device.ip}
                               label="IP address"
+                              href={
+                                demo
+                                  ? undefined
+                                  : `http://${device.ip.includes(":") ? `[${device.ip}]` : device.ip}/#/`
+                              }
                             />
                             {device.coin ? ` · ${device.coin}` : ""}
                           </span>

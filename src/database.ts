@@ -128,6 +128,14 @@ export function openDatabase(path: string) {
       sqlite.exec(`ALTER TABLE workspaces ADD COLUMN temperature_unit TEXT NOT NULL DEFAULT 'C' CHECK(temperature_unit IN ('C', 'F'));
         INSERT INTO schema_migrations(version) VALUES (9);`);
     }
+    if (
+      !sqlite
+        .prepare("SELECT version FROM schema_migrations WHERE version = 10")
+        .get()
+    ) {
+      sqlite.exec(`ALTER TABLE workspaces ADD COLUMN agent_access_enabled INTEGER NOT NULL DEFAULT 0 CHECK(agent_access_enabled IN (0, 1));
+        INSERT INTO schema_migrations(version) VALUES (10);`);
+    }
   })();
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }
